@@ -1,6 +1,6 @@
 # Chartwatch
 
-Top-10 music charts on one page. YouTube and Apple Music are live. Spotify and SoundCloud show sample data until their fetchers are added.
+Top-10 music charts on one page. YouTube, Apple Music and Deezer (worldwide) are live. The Spotify and SoundCloud tabs link to their own official charts, because neither platform gives new developers open access to chart data (checked November 2026: Spotify's Development Mode can't read public playlists like Top 50, and SoundCloud's self-serve API needs an Artist Pro plan).
 
 ## Run it on your computer
 
@@ -45,4 +45,4 @@ Things to know:
 
 ## Adding the next platform
 
-Add a function to `FETCHERS` in `server.js` that returns `{ unit, items: [{ id, rank, title, artist, value, cover, url }] }`. Use `value: null` when a platform has no count. The page, the hourly refresh and the movement arrows pick it up with no other changes.
+To turn a link-only tab into a live one, remove `linkOnly: true` from its entry in `PLATFORMS` in `public/index.html`, then add a function to `FETCHERS` in `server.js` that returns `{ unit, items: [{ id, rank, title, artist, value, cover, url }] }`. Use `value: null` when a platform has no count. The page, the hourly refresh and the movement arrows pick it up with no other changes.

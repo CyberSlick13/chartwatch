@@ -178,10 +178,35 @@ async function appleChart(region) {
   return { unit: "", items: items };
 }
 
-// One entry per connected platform. Spotify and SoundCloud can be added here later.
-const FETCHERS = { youtube: youtubeChart, apple: appleChart };
+// Deezer's open worldwide chart. No key needed, and it is labeled as Deezer on the page.
+async function deezerChart() {
+  const res = await fetch("https://api.deezer.com/chart/0/tracks?limit=10");
+  if (!res.ok) throw new Error("Deezer responded " + res.status);
+  const json = await res.json();
+  const tracks = json.data || (json.tracks && json.tracks.data) || [];
+
+  const items = tracks.map(function (t, i) {
+    const album = t.album || {};
+    return {
+      id: String(t.id),
+      rank: i + 1,
+      title: t.title,
+      artist: t.artist ? t.artist.name : "",
+      value: null,
+      cover: album.cover_medium || album.cover || null,
+      url: t.link || null
+    };
+  });
+  if (!items.length) throw new Error("Deezer returned no tracks");
+  return { unit: "", items: items };
+}
+
+// One entry per connected platform. Spotify and SoundCloud have no open chart feed (see README).
+const FETCHERS = { youtube: youtubeChart, apple: appleChart, deezer: deezerChart };
+const GLOBAL_PLATFORMS = { deezer: true }; // one worldwide chart, so the region setting is ignored
 
 async function getChart(platform, region, force) {
+  if (GLOBAL_PLATFORMS[platform]) region = "gl";
   const key = platform + ":" + region;
   const hit = cache.get(key);
   if (!force && hit && Date.now() - hit.at < CACHE_MS) return hit.data;
@@ -269,6 +294,7 @@ async function refreshAll() {
   for (const platform of Object.keys(FETCHERS)) {
     if (platform === "youtube" && !YOUTUBE_API_KEY) continue;
     for (const region of Object.keys(YOUTUBE_REGIONS)) {
+      if (GLOBAL_PLATFORMS[platform] && region !== "gl") continue;
       try {
         await getChart(platform, region, true);
       } catch (err) {
