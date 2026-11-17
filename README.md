@@ -1,6 +1,6 @@
 # Chartwatch
 
-Top-10 music charts on one page. YouTube, Apple Music and Deezer (Nigeria and worldwide) are live. The Spotify and SoundCloud tabs link to their own official charts, because neither platform gives new developers open access to chart data (checked November 2026: Spotify's Development Mode can't read public playlists like Top 50, and SoundCloud's self-serve API needs an Artist Pro plan).
+Top charts from YouTube, Apple Music and Deezer on one page, for Nigeria, Ghana, South Africa, Kenya, the United Kingdom and the United States (plus Deezer's worldwide chart). Each chart shows the top 10 with a button for the top 50, and most rows have a 30-second preview. Spotify and SoundCloud are not listed because neither gives new developers open access to chart data (checked November 2026: Spotify's Development Mode can't read public playlists like Top 50, and SoundCloud's self-serve API needs an Artist Pro plan). The footer links to their official charts.
 
 ## Run it on your computer
 
@@ -8,7 +8,7 @@ Top-10 music charts on one page. YouTube, Apple Music and Deezer (Nigeria and wo
 2. Copy `.env.example` to `.env` and paste the key in.
 3. Run `node server.js` (Node 18 or newer) and open http://localhost:3000.
 
-Without a key the page still works. YouTube shows sample data, and Apple Music needs no key at all.
+Without a key the page still works. YouTube shows sample data for Nigeria only, and Apple Music and Deezer need no key at all.
 
 ## How it works
 
@@ -21,6 +21,12 @@ Without a key the page still works. YouTube shows sample data, and Apple Music n
 - The keys stay on the server and are never sent to the browser.
 - YouTube lists show view counts. Apple's feed gives a ranking only, so Apple rows have no number.
 - `/health` answers `{"ok":true}`. It exists so a pinger can keep a free host awake.
+
+### Previews and countries
+
+- Deezer rows play the 30-second preview file Deezer provides. Apple Music rows play Apple's preview, looked up from Apple's public lookup (rows without one get no button). YouTube rows open YouTube's own embedded player under the row. Some videos block embedding, and the page says so.
+- Countries are listed in `COUNTRIES` in `server.js` (and the same list in `public/index.html`). To add one, add it to both. Not every platform publishes a chart for every country.
+- Deezer's country charts are Deezer's own "Top <country>" playlists, found by name. If one can't be found, the page shows Deezer's worldwide chart and says so.
 
 ### Movement arrows
 
@@ -46,6 +52,6 @@ Things to know:
 - Free plans change. Check Render's and Upstash's current free-plan pages if something stops working.
 - Treat the YouTube key and the Upstash token like passwords. Never commit them to GitHub.
 
-## Adding the next platform
+## Adding another platform
 
-To turn a link-only tab into a live one, remove `linkOnly: true` from its entry in `PLATFORMS` in `public/index.html`, then add a function to `FETCHERS` in `server.js` that returns `{ unit, items: [{ id, rank, title, artist, value, cover, url }] }`. Use `value: null` when a platform has no count. The page, the hourly refresh and the movement arrows pick it up with no other changes.
+Add a function to `FETCHERS` in `server.js` that returns `{ unit, items: [{ id, rank, title, artist, value, cover, url, preview, embed }] }` (`value`, `preview` and `embed` are optional), then add the platform to `PLATFORMS` in `public/index.html`. The hourly refresh and the movement arrows pick it up with no other changes.

@@ -30,11 +30,25 @@ const REDIS_TOKEN = cleanSetting(process.env.UPSTASH_REDIS_REST_TOKEN);
 const USE_REDIS = Boolean(REDIS_URL && REDIS_TOKEN);
 const HISTORY_KEY = "chartwatch:history";
 const CACHE_MS = 60 * 60 * 1000; // refresh each chart at most once an hour
-const KEEP_DAYS = 14; // how many daily snapshots to remember per chart
+const KEEP_DAYS = 3; // daily snapshots kept per chart. Only the latest earlier day is used for the arrows.
+const CHART_SIZE = 50;
 
-// The page's two region buttons: "ng" is Nigeria, "gl" is shown as United States.
-const YOUTUBE_REGIONS = { ng: "NG", gl: "US" };
-const APPLE_COUNTRIES = { ng: "ng", gl: "us" };
+// Countries offered on the page. "yt" is YouTube's regionCode, "apple" is Apple's storefront code, and
+// "deezer" lists the names Deezer's own country-chart playlist might have (first exact match wins).
+const COUNTRIES = {
+  ng: { name: "Nigeria", yt: "NG", apple: "ng", deezer: ["Top Nigeria"] },
+  gh: { name: "Ghana", yt: "GH", apple: "gh", deezer: ["Top Ghana"] },
+  za: { name: "South Africa", yt: "ZA", apple: "za", deezer: ["Top South Africa"] },
+  ke: { name: "Kenya", yt: "KE", apple: "ke", deezer: ["Top Kenya"] },
+  gb: { name: "United Kingdom", yt: "GB", apple: "gb", deezer: ["Top United Kingdom", "Top UK"] },
+  us: { name: "United States", yt: "US", apple: "us", deezer: ["Top United States", "Top USA", "Top US"] }
+};
+const COUNTRY_IDS = Object.keys(COUNTRIES);
+const REGIONS_BY_PLATFORM = {
+  youtube: COUNTRY_IDS,
+  apple: COUNTRY_IDS,
+  deezer: COUNTRY_IDS.concat(["gl"]) // "gl" is Deezer's worldwide chart
+};
 
 const cache = new Map();
 
@@ -80,7 +94,7 @@ async function loadHistory() {
   }
 }
 
-function saveHistory() {
+function writeHistoryNow() {
   if (!historyLoaded) return;
   if (USE_REDIS) {
     redis(["SET", HISTORY_KEY, JSON.stringify(history)]).catch(function (e) {
@@ -96,6 +110,16 @@ function saveHistory() {
   } catch (e) {
     console.error("Could not save history:", e.message);
   }
+}
+
+// Many charts refresh together, so saves are grouped into one write a couple of seconds later.
+let saveTimer = null;
+function saveHistory() {
+  if (saveTimer) return;
+  saveTimer = setTimeout(function () {
+    saveTimer = null;
+    writeHistoryNow();
+  }, 2000);
 }
 
 // Adds item.prev (last snapshot's rank, or null for a new entry) and returns the date compared against.
@@ -122,6 +146,8 @@ function applyMovement(key, items) {
 }
 
 /* ---------- Platform fetchers ---------- */
+// Each returns { unit, items: [{ id, rank, title, artist, value, cover, url, preview?, embed? }] }.
+// "preview" is a 30-second audio file. "embed" is a YouTube video id for the official embedded player.
 
 async function youtubeChart(region) {
   const url = new URL("https://www.googleapis.com/youtube/v3/videos");
@@ -129,8 +155,8 @@ async function youtubeChart(region) {
     part: "snippet,statistics",
     chart: "mostPopular",
     videoCategoryId: "10", // Music
-    regionCode: YOUTUBE_REGIONS[region],
-    maxResults: "10",
+    regionCode: COUNTRIES[region].yt,
+    maxResults: String(CHART_SIZE),
     key: YOUTUBE_API_KEY
   }).toString();
 
@@ -148,16 +174,33 @@ async function youtubeChart(region) {
       artist: v.snippet.channelTitle.replace(/ - Topic$/i, "").replace(/VEVO$/i, ""),
       value: Number(v.statistics && v.statistics.viewCount) || 0,
       cover: thumb.url || null,
-      url: "https://www.youtube.com/watch?v=" + v.id
+      url: "https://www.youtube.com/watch?v=" + v.id,
+      embed: v.id
     };
   });
   if (!items.length) throw new Error("YouTube returned no videos");
   return { unit: "views", items: items };
 }
 
+// Apple's feed gives a ranking but no previews, so previews come from Apple's public lookup. If that fails, rows just have no play button.
+async function applyApplePreviews(items, country) {
+  try {
+    const ids = items.map(function (i) { return i.id; }).join(",");
+    const res = await fetch("https://itunes.apple.com/lookup?id=" + ids + "&country=" + country);
+    if (!res.ok) throw new Error("responded " + res.status);
+    const json = await res.json();
+    const byId = {};
+    for (const r of json.results || []) if (r.trackId && r.previewUrl) byId[String(r.trackId)] = r.previewUrl;
+    for (const it of items) if (byId[it.id]) it.preview = byId[it.id];
+  } catch (e) {
+    console.error("Apple previews:", e.message);
+  }
+}
+
 // Apple's public "most played" feed. No key needed, and it gives a ranking but no play counts.
 async function appleChart(region) {
-  const url = "https://rss.marketingtools.apple.com/api/v2/" + APPLE_COUNTRIES[region] + "/music/most-played/10/songs.json";
+  const country = COUNTRIES[region].apple;
+  const url = "https://rss.marketingtools.apple.com/api/v2/" + country + "/music/most-played/" + CHART_SIZE + "/songs.json";
   const res = await fetch(url);
   if (!res.ok) throw new Error("Apple feed responded " + res.status);
   const json = await res.json();
@@ -175,12 +218,13 @@ async function appleChart(region) {
     };
   });
   if (!items.length) throw new Error("Apple feed returned no songs");
+  await applyApplePreviews(items, country);
   return { unit: "", items: items };
 }
 
-// Deezer's open charts. No key needed, and the page labels them as Deezer.
-// "gl" is Deezer's worldwide chart. "ng" is Deezer's own "Top Nigeria" playlist, found by name the first
-// time it is needed. If that playlist can't be found, the worldwide chart is returned and marked as a fallback.
+// Deezer's open charts. No key needed, and the page labels them as Deezer. "gl" is the worldwide chart.
+// A country chart is Deezer's own "Top <country>" playlist, found by name the first time it is needed.
+// If that playlist can't be found, the worldwide chart is returned and marked as a fallback.
 const deezerPlaylistIds = {};
 
 async function deezerGet(url) {
@@ -189,34 +233,36 @@ async function deezerGet(url) {
   return res.json();
 }
 
-async function deezerNigeriaTracks() {
-  let id = deezerPlaylistIds.ng;
+async function deezerCountryTracks(region) {
+  let id = deezerPlaylistIds[region];
   if (!id) {
-    const found = await deezerGet("https://api.deezer.com/search/playlist?q=" + encodeURIComponent("Top Nigeria"));
-    const hit = (found.data || []).find(function (p) {
-      return p.title === "Top Nigeria" && p.user && /deezer/i.test(p.user.name || "");
-    });
-    if (!hit) throw new Error("Nigeria chart playlist not found");
-    id = deezerPlaylistIds.ng = hit.id;
+    for (const name of COUNTRIES[region].deezer) {
+      const found = await deezerGet("https://api.deezer.com/search/playlist?q=" + encodeURIComponent(name));
+      const hit = (found.data || []).find(function (p) {
+        return (p.title || "").toLowerCase() === name.toLowerCase() && p.user && /deezer/i.test(p.user.name || "");
+      });
+      if (hit) { id = deezerPlaylistIds[region] = hit.id; break; }
+    }
+    if (!id) throw new Error(COUNTRIES[region].name + " chart playlist not found");
   }
-  const json = await deezerGet("https://api.deezer.com/playlist/" + id + "/tracks?limit=10");
+  const json = await deezerGet("https://api.deezer.com/playlist/" + id + "/tracks?limit=" + CHART_SIZE);
   return json.data || [];
 }
 
 async function deezerChart(region) {
   let tracks = null;
   let scope = "worldwide";
-  if (region === "ng") {
+  if (region !== "gl") {
     try {
-      tracks = await deezerNigeriaTracks();
-      if (tracks.length) scope = "nigeria"; else tracks = null;
+      tracks = await deezerCountryTracks(region);
+      if (tracks.length) scope = "country"; else tracks = null;
     } catch (e) {
-      console.error("Deezer Nigeria chart:", e.message);
+      console.error("Deezer " + region + " chart:", e.message);
       tracks = null;
     }
   }
   if (!tracks) {
-    const json = await deezerGet("https://api.deezer.com/chart/0/tracks?limit=10");
+    const json = await deezerGet("https://api.deezer.com/chart/0/tracks?limit=" + CHART_SIZE);
     tracks = json.data || (json.tracks && json.tracks.data) || [];
   }
 
@@ -229,14 +275,15 @@ async function deezerChart(region) {
       artist: t.artist ? t.artist.name : "",
       value: null,
       cover: album.cover_medium || album.cover || null,
-      url: t.link || null
+      url: t.link || null,
+      preview: t.preview || null
     };
   });
   if (!items.length) throw new Error("Deezer returned no tracks");
   return { unit: "", scope: scope, items: items };
 }
 
-// One entry per connected platform. Spotify and SoundCloud have no open chart feed (see README).
+// Spotify and SoundCloud have no open chart feed for new developers (see README), so they are not listed here.
 const FETCHERS = { youtube: youtubeChart, apple: appleChart, deezer: deezerChart };
 
 async function getChart(platform, region, force) {
@@ -245,7 +292,9 @@ async function getChart(platform, region, force) {
   if (!force && hit && Date.now() - hit.at < CACHE_MS) return hit.data;
   try {
     const data = await FETCHERS[platform](region);
-    const since = applyMovement(key, data.items);
+    // A worldwide fallback must not be compared with a real country chart, so it gets its own history entry.
+    const historyKey = data.scope === "worldwide" && region !== "gl" ? key + ":ww" : key;
+    const since = applyMovement(historyKey, data.items);
     const out = Object.assign(
       { platform: platform, region: region, source: "live", updated: new Date().toISOString(), since: since },
       data
@@ -310,7 +359,7 @@ const server = http.createServer(async function (req, res) {
   const region = url.searchParams.get("region") || "ng";
 
   if (!FETCHERS[platform]) return sendJson(res, 501, { error: "not_connected", platform: platform });
-  if (!YOUTUBE_REGIONS[region]) return sendJson(res, 400, { error: "unknown_region", region: region });
+  if (!REGIONS_BY_PLATFORM[platform].includes(region)) return sendJson(res, 400, { error: "unknown_region", region: region });
   if (platform === "youtube" && !YOUTUBE_API_KEY) return sendJson(res, 503, { error: "missing_api_key" });
 
   try {
@@ -321,12 +370,12 @@ const server = http.createServer(async function (req, res) {
   }
 });
 
-// Refreshes every connected chart on a timer, so history is saved and charts stay warm even with no visitors.
+// Refreshes every chart on a timer, so history is saved and charts stay warm even with no visitors.
 async function refreshAll() {
   if (!historyLoaded) await loadHistory();
   for (const platform of Object.keys(FETCHERS)) {
     if (platform === "youtube" && !YOUTUBE_API_KEY) continue;
-    for (const region of Object.keys(YOUTUBE_REGIONS)) {
+    for (const region of REGIONS_BY_PLATFORM[platform]) {
       try {
         await getChart(platform, region, true);
       } catch (err) {
