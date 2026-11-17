@@ -21,8 +21,12 @@ const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "data");
 const HISTORY_FILE = path.join(DATA_DIR, "history.json");
 // Optional free online store for the daily history (Upstash Redis). Without it, a local file is used.
-const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL;
-const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
+// Settings pasted into a host's dashboard often carry stray spaces, line breaks or quote marks, so clean them.
+function cleanSetting(v) {
+  return v ? v.trim().replace(/^["'`]+|["'`]+$/g, "").trim() : v;
+}
+const REDIS_URL = cleanSetting(process.env.UPSTASH_REDIS_REST_URL);
+const REDIS_TOKEN = cleanSetting(process.env.UPSTASH_REDIS_REST_TOKEN);
 const USE_REDIS = Boolean(REDIS_URL && REDIS_TOKEN);
 const HISTORY_KEY = "chartwatch:history";
 const CACHE_MS = 60 * 60 * 1000; // refresh each chart at most once an hour
@@ -66,6 +70,13 @@ async function loadHistory() {
     historyLoaded = true;
   } catch (e) {
     console.error("Could not load history:", e.message);
+    if (USE_REDIS && /401/.test(e.message)) {
+      console.error(
+        "Upstash rejected the token. Using database " + new URL(REDIS_URL).hostname +
+        " and a token of " + REDIS_TOKEN.length + " characters. Check that the URL and token come from the same database, " +
+        "and that the token is the normal one, not read-only."
+      );
+    }
   }
 }
 
