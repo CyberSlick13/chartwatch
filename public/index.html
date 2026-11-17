@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Chartwatch</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap">
+<style>
+/* Layout: one narrow column. Platform tabs and a region switch on top, a single ranked list below, rows scan left to right: rank, cover, track, metric. */
+:root {
+  --bg: #f1f4f7;
+  --surface: #ffffff;
+  --fg: #131820;
+  --muted: #5b6573;
+  --line: #dce1e8;
+  --accent: #2744ff;
+  --accent-fg: #ffffff;
+  --up: #15764a;
+  --down: #b3261e;
+  --new: #8a5a00;
+  --yt: #e5342b;
+  --sp: #1db45a;
+  --am: #f2476a;
+  --sc: #ff6a1a;
+  --font-display: "Space Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1218; --surface: #161b23; --fg: #edf0f5; --muted: #97a1af; --line: #28303b;
+    --accent: #8294ff; --accent-fg: #0e1218; --up: #5fd39a; --down: #ff8a80; --new: #f0c060;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1218; --surface: #161b23; --fg: #edf0f5; --muted: #97a1af; --line: #28303b;
+  --accent: #8294ff; --accent-fg: #0e1218; --up: #5fd39a; --down: #ff8a80; --new: #f0c060;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; }
+[hidden] { display: none !important; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+  padding-block: 28px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+.top { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: 2rem; letter-spacing: -0.02em; margin: 0; line-height: 1.1; text-wrap: balance; }
+.lede { margin: 6px 0 0; color: var(--muted); max-width: 46ch; }
+.sample {
+  font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--new); border: 1px solid currentColor; border-radius: 999px; padding: 4px 10px; white-space: nowrap;
+}
+
+.controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+.tabs, .region { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+button {
+  font: inherit; color: var(--fg); background: var(--surface); border: 1px solid var(--line);
+  border-radius: 8px; padding: 8px 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px;
+}
+button:hover { border-color: var(--muted); }
+button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button[aria-selected="true"], button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+.dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.panel-head { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; justify-content: space-between; padding: 16px 16px 12px; border-bottom: 1px solid var(--line); }
+.panel-head h2 { font-family: var(--font-display); font-size: 1.15rem; margin: 0; display: flex; align-items: center; gap: 8px; }
+.panel-head .meta { color: var(--muted); font-size: 13px; }
+.panel-head a { color: var(--accent); font-size: 13px; font-weight: 500; text-decoration: none; }
+.panel-head a:hover { text-decoration: underline; }
+
+ol { list-style: none; margin: 0; padding: 0; }
+li.row {
+  display: grid; grid-template-columns: 2.4rem 48px minmax(0, 1fr) auto; gap: 14px; align-items: center;
+  padding: 12px 16px; border-bottom: 1px solid var(--line);
+}
+li.row:last-child { border-bottom: 0; }
+.rank { text-align: center; font-family: var(--font-display); font-weight: 700; font-size: 1.2rem; font-variant-numeric: tabular-nums; line-height: 1; }
+.rank small { display: block; margin-top: 4px; font-family: var(--font-body); font-weight: 600; font-size: 11px; }
+li.row.top3 .rank { color: var(--accent); }
+.up { color: var(--up); } .down { color: var(--down); } .flat { color: var(--muted); } .isnew { color: var(--new); }
+.cover { width: 48px; height: 48px; border-radius: 6px; flex: none; }
+img.cover { object-fit: cover; display: block; }
+.info { min-width: 0; }
+.title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.artist { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.metric { text-align: right; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.metric b { display: block; color: var(--fg); font-weight: 600; font-size: 14px; }
+
+.foot { color: var(--muted); font-size: 13px; max-width: 62ch; }
+.foot code { font-size: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; }
+
+@media (max-width: 460px) {
+  h1 { font-size: 1.6rem; }
+  li.row { grid-template-columns: 2rem 44px minmax(0, 1fr) auto; gap: 10px; padding: 10px 12px; }
+  .cover { width: 44px; height: 44px; }
+  .panel-head { padding: 14px 12px 10px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  li.row { transition: background-color .15s; }
+  li.row:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Chartwatch</h1>
+      <p class="lede">The week's top tracks on YouTube, Spotify, Apple Music and SoundCloud, side by side.</p>
+    </div>
+    <span class="sample" id="sample-pill">Sample data</span>
+  </header>
+
+  <div class="controls">
+    <div class="tabs" role="tablist" aria-label="Platform" id="tabs"></div>
+    <div class="region" role="group" aria-label="Region" id="region"></div>
+  </div>
+
+  <section class="panel" aria-live="polite">
+    <div class="panel-head">
+      <h2 id="panel-title"></h2>
+      <span class="meta" id="panel-meta"></span>
+      <a id="panel-link" href="#" target="_blank" rel="noopener">Open the official chart</a>
+    </div>
+    <ol id="list"></ol>
+  </section>
+
+  <p class="foot">Live charts come from your own server. Platforms that are not connected yet show made-up sample data, marked with a tag at the top.</p>
+</div>
+
+<script>
+/* ---- Sample data, used for any platform the server cannot serve yet. ---- */
+const TRACKS = [
+  ["Third Mainland Nights", "Ruka"],
+  ["Palm Wine Static", "Odu & Sable"],
+  ["Neon Okada", "Zeno Bright"],
+  ["Slow Dance Generator", "Ify Marlowe"],
+  ["Harmattan Hours", "Kosi"],
+  ["Concrete Halo", "Daro Vance"],
+  ["Bridge Traffic", "Mimi Ade"],
+  ["Chrome Suya", "Tekno Lark"],
+  ["Rivers Don't Sleep", "Ebi"],
+  ["Jollof Algebra", "The Sunday Crew"],
+  ["Ghost in the Danfo", "Nara"],
+  ["Golden Hour Wahala", "Sade Okoro"],
+  ["Delta Blue", "Oru"],
+  ["Signal Lost", "Kade"]
+];
+
+const PLATFORMS = {
+  youtube:    { name: "YouTube",     color: "var(--yt)", unit: "views",   base: 9.8e6, link: "https://charts.youtube.com/" },
+  spotify:    { name: "Spotify",     color: "var(--sp)", unit: "streams", base: 6.4e6, link: "https://charts.spotify.com/" },
+  apple:      { name: "Apple Music", color: "var(--am)", unit: "points",      base: 980,   link: "https://music.apple.com/" },
+  soundcloud: { name: "SoundCloud",  color: "var(--sc)", unit: "plays",   base: 2.1e6, link: "https://soundcloud.com/charts/top" }
+};
+
+/* Each entry: [track index, last week's rank or null for a new entry] */
+const ORDER = {
+  ng: {
+    youtube:    [[2,1],[0,3],[8,2],[5,6],[1,4],[11,null],[4,8],[7,5],[10,9],[3,12]],
+    spotify:    [[0,1],[2,2],[11,4],[1,3],[8,7],[6,5],[4,null],[9,10],[5,6],[13,9]],
+    apple:      [[11,2],[0,1],[2,3],[4,6],[8,4],[1,5],[7,null],[12,9],[6,7],[3,8]],
+    soundcloud: [[10,3],[7,1],[2,2],[12,null],[5,5],[9,4],[1,8],[13,6],[8,10],[0,7]]
+  },
+  gl: {
+    youtube:    [[3,2],[6,1],[13,3],[9,5],[0,4],[2,null],[12,7],[5,6],[7,10],[11,8]],
+    spotify:    [[6,1],[3,3],[9,2],[13,4],[2,5],[0,8],[12,6],[10,null],[1,7],[7,9]],
+    apple:      [[13,1],[3,2],[6,4],[12,3],[9,null],[0,5],[2,6],[5,8],[10,7],[8,9]],
+    soundcloud: [[12,2],[9,1],[3,null],[10,4],[13,3],[7,6],[6,5],[0,9],[11,7],[2,8]]
+  }
+};
+const REGIONS = { ng: "Nigeria", gl: "United States" };
+
+function sampleChart(platform, region) {
+  const p = PLATFORMS[platform];
+  const regionScale = region === "ng" ? 0.55 : 1;
+  return ORDER[region][platform].map(([id, prev], i) => ({
+    rank: i + 1,
+    prev,
+    id,
+    title: TRACKS[id][0],
+    artist: TRACKS[id][1],
+    value: p.base * regionScale * Math.pow(0.9, i)
+  }));
+}
+
+async function loadChart(platform, region) {
+  try {
+    const res = await fetch("/api/charts/" + platform + "?region=" + region);
+    if (res.ok) return await res.json();
+  } catch (e) { /* server down or not reachable: use sample data */ }
+  return { source: "sample", unit: PLATFORMS[platform].unit, items: sampleChart(platform, region) };
+}
+
+function fmt(n) {
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + "M";
+  if (n >= 1e3 && n < 1e4) return Math.round(n).toLocaleString("en-US");
+  if (n >= 1e4) return Math.round(n / 1e3) + "K";
+  return String(Math.round(n));
+}
+function coverStyle(id) {
+  const h = (id * 47 + 18) % 360;
+  return "background:linear-gradient(135deg,hsl(" + h + " 70% 52%),hsl(" + ((h + 55) % 360) + " 75% 38%))";
+}
+function moveHtml(r) {
+  if (r.prev === undefined) return '';
+  if (r.prev === null) return '<small class="isnew">NEW</small>';
+  const d = r.prev - r.rank;
+  if (d > 0) return '<small class="up">&#9650; ' + d + '</small>';
+  if (d < 0) return '<small class="down">&#9660; ' + (-d) + '</small>';
+  return '<small class="flat">&ndash;</small>';
+}
+
+/* ---- Rendering ---- */
+const state = { platform: "youtube", region: "ng" };
+try {
+  const h = location.hash.slice(1);
+  if (PLATFORMS[h]) state.platform = h;
+} catch (e) {}
+
+const tabsEl = document.getElementById("tabs");
+const regionEl = document.getElementById("region");
+
+Object.keys(PLATFORMS).forEach(function (key) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.id = "tab-" + key;
+  b.setAttribute("role", "tab");
+  b.dataset.key = key;
+  b.innerHTML = '<span class="dot" style="background:' + PLATFORMS[key].color + '"></span>' + PLATFORMS[key].name;
+  b.addEventListener("click", function () { state.platform = key; render(); try { history.replaceState(null, "", "#" + key); } catch (e) {} });
+  tabsEl.appendChild(b);
+});
+Object.keys(REGIONS).forEach(function (key) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.id = "region-" + key;
+  b.dataset.key = key;
+  b.textContent = REGIONS[key];
+  b.addEventListener("click", function () { state.region = key; render(); });
+  regionEl.appendChild(b);
+});
+
+let renderToken = 0;
+async function render() {
+  const token = ++renderToken;
+  const p = PLATFORMS[state.platform];
+  tabsEl.querySelectorAll("button").forEach(function (b) {
+    b.setAttribute("aria-selected", b.dataset.key === state.platform ? "true" : "false");
+  });
+  regionEl.querySelectorAll("button").forEach(function (b) {
+    b.setAttribute("aria-pressed", b.dataset.key === state.region ? "true" : "false");
+  });
+  document.getElementById("panel-title").innerHTML = '<span class="dot" style="background:' + p.color + '"></span>' + p.name + " Top 10";
+  document.getElementById("panel-link").href = p.link;
+  const data = await loadChart(state.platform, state.region);
+  if (token !== renderToken) return;
+  const live = data.source === "live";
+  document.getElementById("sample-pill").hidden = live;
+  document.getElementById("panel-meta").textContent = REGIONS[state.region] + " · " +
+    (live ? "updated " + new Date(data.updated).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "sample data") +
+    (live && data.since ? " · moves since " + new Date(data.since + "T00:00:00Z").toLocaleDateString([], { month: "short", day: "numeric", timeZone: "UTC" }) : "");
+
+  const rows = data.items.map(function (r) {
+    const li = document.createElement("li");
+    li.className = "row" + (r.rank <= 3 ? " top3" : "");
+    li.innerHTML =
+      '<div class="rank">' + r.rank + moveHtml(r) + '</div>' +
+      (r.cover
+        ? '<img class="cover" alt="" src="' + encodeURI(r.cover).replace(/"/g, "%22") + '">'
+        : '<div class="cover" style="' + coverStyle(r.id) + '" role="img" aria-label="Sample cover art"></div>') +
+      '<div class="info"><div class="title"></div><div class="artist"></div></div>' +
+      (r.value == null
+        ? '<div class="metric"></div>'
+        : '<div class="metric"><b>' + fmt(r.value) + '</b>' + (data.unit || p.unit) + '</div>');
+    const titleEl = li.querySelector(".title");
+    if (r.url) {
+      const a = document.createElement("a");
+      a.href = r.url; a.target = "_blank"; a.rel = "noopener"; a.textContent = r.title;
+      a.style.color = "inherit"; a.style.textDecoration = "none";
+      titleEl.appendChild(a);
+    } else {
+      titleEl.textContent = r.title;
+    }
+    li.querySelector(".artist").textContent = r.artist;
+    return li;
+  });
+  const list = document.getElementById("list");
+  list.replaceChildren.apply(list, rows);
+}
+render();
+</script>
+</body>
+</html>

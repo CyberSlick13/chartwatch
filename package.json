@@ -1,0 +1,12 @@
+{
+  "name": "chartwatch",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Trending music charts from YouTube, Spotify, Apple Music and SoundCloud.",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
