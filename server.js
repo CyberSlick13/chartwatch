@@ -178,12 +178,47 @@ async function appleChart(region) {
   return { unit: "", items: items };
 }
 
-// Deezer's open worldwide chart. No key needed, and it is labeled as Deezer on the page.
-async function deezerChart() {
-  const res = await fetch("https://api.deezer.com/chart/0/tracks?limit=10");
+// Deezer's open charts. No key needed, and the page labels them as Deezer.
+// "gl" is Deezer's worldwide chart. "ng" is Deezer's own "Top Nigeria" playlist, found by name the first
+// time it is needed. If that playlist can't be found, the worldwide chart is returned and marked as a fallback.
+const deezerPlaylistIds = {};
+
+async function deezerGet(url) {
+  const res = await fetch(url);
   if (!res.ok) throw new Error("Deezer responded " + res.status);
-  const json = await res.json();
-  const tracks = json.data || (json.tracks && json.tracks.data) || [];
+  return res.json();
+}
+
+async function deezerNigeriaTracks() {
+  let id = deezerPlaylistIds.ng;
+  if (!id) {
+    const found = await deezerGet("https://api.deezer.com/search/playlist?q=" + encodeURIComponent("Top Nigeria"));
+    const hit = (found.data || []).find(function (p) {
+      return p.title === "Top Nigeria" && p.user && /deezer/i.test(p.user.name || "");
+    });
+    if (!hit) throw new Error("Nigeria chart playlist not found");
+    id = deezerPlaylistIds.ng = hit.id;
+  }
+  const json = await deezerGet("https://api.deezer.com/playlist/" + id + "/tracks?limit=10");
+  return json.data || [];
+}
+
+async function deezerChart(region) {
+  let tracks = null;
+  let scope = "worldwide";
+  if (region === "ng") {
+    try {
+      tracks = await deezerNigeriaTracks();
+      if (tracks.length) scope = "nigeria"; else tracks = null;
+    } catch (e) {
+      console.error("Deezer Nigeria chart:", e.message);
+      tracks = null;
+    }
+  }
+  if (!tracks) {
+    const json = await deezerGet("https://api.deezer.com/chart/0/tracks?limit=10");
+    tracks = json.data || (json.tracks && json.tracks.data) || [];
+  }
 
   const items = tracks.map(function (t, i) {
     const album = t.album || {};
@@ -198,15 +233,13 @@ async function deezerChart() {
     };
   });
   if (!items.length) throw new Error("Deezer returned no tracks");
-  return { unit: "", items: items };
+  return { unit: "", scope: scope, items: items };
 }
 
 // One entry per connected platform. Spotify and SoundCloud have no open chart feed (see README).
 const FETCHERS = { youtube: youtubeChart, apple: appleChart, deezer: deezerChart };
-const GLOBAL_PLATFORMS = { deezer: true }; // one worldwide chart, so the region setting is ignored
 
 async function getChart(platform, region, force) {
-  if (GLOBAL_PLATFORMS[platform]) region = "gl";
   const key = platform + ":" + region;
   const hit = cache.get(key);
   if (!force && hit && Date.now() - hit.at < CACHE_MS) return hit.data;
@@ -294,7 +327,6 @@ async function refreshAll() {
   for (const platform of Object.keys(FETCHERS)) {
     if (platform === "youtube" && !YOUTUBE_API_KEY) continue;
     for (const region of Object.keys(YOUTUBE_REGIONS)) {
-      if (GLOBAL_PLATFORMS[platform] && region !== "gl") continue;
       try {
         await getChart(platform, region, true);
       } catch (err) {

@@ -1,6 +1,6 @@
 # Chartwatch
 
-Top-10 music charts on one page. YouTube, Apple Music and Deezer (worldwide) are live. The Spotify and SoundCloud tabs link to their own official charts, because neither platform gives new developers open access to chart data (checked November 2026: Spotify's Development Mode can't read public playlists like Top 50, and SoundCloud's self-serve API needs an Artist Pro plan).
+Top-10 music charts on one page. YouTube, Apple Music and Deezer (Nigeria and worldwide) are live. The Spotify and SoundCloud tabs link to their own official charts, because neither platform gives new developers open access to chart data (checked November 2026: Spotify's Development Mode can't read public playlists like Top 50, and SoundCloud's self-serve API needs an Artist Pro plan).
 
 ## Run it on your computer
 
@@ -11,6 +11,9 @@ Top-10 music charts on one page. YouTube, Apple Music and Deezer (worldwide) are
 Without a key the page still works. YouTube shows sample data, and Apple Music needs no key at all.
 
 ## How it works
+
+- Deezer's Nigeria chart is Deezer's own "Top Nigeria" playlist, found by name the first time it is needed. If it can't be found, the page shows Deezer's worldwide chart and says so.
+- An open page reloads its chart every 5 minutes and shows how long ago the server fetched it.
 
 - `server.js` fetches each chart, keeps the result for an hour, and serves it at `/api/charts/<platform>?region=ng`.
 - Once an hour the server also refreshes every chart by itself, so history is saved and charts stay fresh even when nobody visits.
