@@ -64,7 +64,9 @@ h1 { font-family: var(--font-display); font-weight: 700; font-size: 2rem; letter
 }
 
 .controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
-.tabs, .region { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+select { font: inherit; color: var(--fg); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; max-width: 100%; cursor: pointer; }
+select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 button {
   font: inherit; color: var(--fg); background: var(--surface); border: 1px solid var(--line);
   border-radius: 8px; padding: 8px 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px;
@@ -83,7 +85,7 @@ button[aria-selected="true"], button[aria-pressed="true"] { background: var(--ac
 
 ol { list-style: none; margin: 0; padding: 0; }
 li.row {
-  display: grid; grid-template-columns: 2.4rem 48px minmax(0, 1fr) auto; gap: 14px; align-items: center;
+  display: grid; grid-template-columns: 2.4rem 48px minmax(0, 1fr) 36px auto; gap: 14px; align-items: center;
   padding: 12px 16px; border-bottom: 1px solid var(--line);
 }
 li.row:last-child { border-bottom: 0; }
@@ -99,14 +101,21 @@ img.cover { object-fit: cover; display: block; }
 .metric { text-align: right; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .metric b { display: block; color: var(--fg); font-weight: 600; font-size: 14px; }
 
+.act { display: flex; justify-content: center; }
+button.play { width: 34px; height: 34px; padding: 0; border-radius: 50%; justify-content: center; flex: none; }
+.embed { grid-column: 1 / -1; padding-top: 4px; }
+.embed iframe { display: block; width: 100%; max-width: 100%; aspect-ratio: 16 / 9; border: 0; border-radius: 8px; background: #000; }
+.embed p { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
+.more { display: flex; justify-content: center; padding: 12px 16px; border-top: 1px solid var(--line); }
 .note { padding: 28px 20px; color: var(--muted); text-align: center; text-wrap: balance; }
 .note a { color: var(--accent); font-weight: 500; }
 .foot { color: var(--muted); font-size: 13px; max-width: 62ch; }
+.foot a { color: var(--accent); }
 .foot code { font-size: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; }
 
 @media (max-width: 460px) {
   h1 { font-size: 1.6rem; }
-  li.row { grid-template-columns: 2rem 44px minmax(0, 1fr) auto; gap: 10px; padding: 10px 12px; }
+  li.row { grid-template-columns: 2rem 44px minmax(0, 1fr) 34px auto; gap: 8px; padding: 10px 12px; }
   .cover { width: 44px; height: 44px; }
   .panel-head { padding: 14px 12px 10px; }
 }
@@ -122,14 +131,14 @@ img.cover { object-fit: cover; display: block; }
   <header class="top">
     <div>
       <h1>Chartwatch</h1>
-      <p class="lede">Top tracks from YouTube, Apple Music and Deezer, with links to the Spotify and SoundCloud charts.</p>
+      <p class="lede">Top tracks from YouTube, Apple Music and Deezer, with 30-second previews.</p>
     </div>
     <span class="sample" id="sample-pill">Sample data</span>
   </header>
 
   <div class="controls">
     <div class="tabs" role="tablist" aria-label="Platform" id="tabs"></div>
-    <div class="region" role="group" aria-label="Region" id="region"></div>
+    <select id="region-select" aria-label="Region"></select>
   </div>
 
   <section class="panel" aria-live="polite">
@@ -139,13 +148,14 @@ img.cover { object-fit: cover; display: block; }
       <a id="panel-link" href="#" target="_blank" rel="noopener">Open the official chart</a>
     </div>
     <ol id="list"></ol>
+    <div class="more" id="more" hidden><button type="button" id="more-btn">Show top 50</button></div>
   </section>
 
-  <p class="foot">Charts refresh from each platform about once an hour. Spotify and SoundCloud do not offer open chart data to new developers, so those tabs link to their own charts. Deezer is a separate service and is not a stand-in for either one. If a chart cannot load, the page shows made-up sample data with a tag at the top.</p>
+  <p class="foot">Charts refresh from each platform about once an hour. Spotify and SoundCloud do not offer open chart data to new developers, so they are not listed here. Their official charts: <a href="https://charts.spotify.com/" target="_blank" rel="noopener">Spotify</a> and <a href="https://soundcloud.com/charts/top" target="_blank" rel="noopener">SoundCloud</a>. Deezer is a separate service. If a chart cannot load, the page may show made-up sample data with a tag at the top.</p>
 </div>
 
 <script>
-/* ---- Sample data, used for any platform the server cannot serve yet. ---- */
+/* ---- Sample data: shown only when YouTube or Apple Music cannot load for Nigeria. ---- */
 const TRACKS = [
   ["Third Mainland Nights", "Ruka"],
   ["Palm Wine Static", "Odu & Sable"],
@@ -162,45 +172,37 @@ const TRACKS = [
   ["Delta Blue", "Oru"],
   ["Signal Lost", "Kade"]
 ];
+/* Each entry: [track index, last week's rank or null for a new entry] */
+const SAMPLE_NG = {
+  youtube: { base: 5.4e6, order: [[2,1],[0,3],[8,2],[5,6],[1,4],[11,null],[4,8],[7,5],[10,9],[3,12]] },
+  apple:   { base: 0,     order: [[11,2],[0,1],[2,3],[4,6],[8,4],[1,5],[7,null],[12,9],[6,7],[3,8]] }
+};
 
 const PLATFORMS = {
-  youtube:    { name: "YouTube",     color: "var(--yt)", unit: "views",   base: 9.8e6, link: "https://charts.youtube.com/" },
-  spotify:    { name: "Spotify",     color: "var(--sp)", unit: "streams", base: 6.4e6, link: "https://charts.spotify.com/", linkOnly: true },
-  apple:      { name: "Apple Music", color: "var(--am)", unit: "points",      base: 980,   link: "https://music.apple.com/" },
-  soundcloud: { name: "SoundCloud",  color: "var(--sc)", unit: "plays",   base: 2.1e6, link: "https://soundcloud.com/charts/top", linkOnly: true },
-  deezer:     { name: "Deezer",      color: "var(--dz)", unit: "",        base: 0,     link: "https://www.deezer.com/en/channels/charts", regionLabels: { ng: "Nigeria", gl: "Worldwide" } }
+  youtube: { name: "YouTube",     color: "var(--yt)", unit: "views", link: "https://charts.youtube.com/" },
+  apple:   { name: "Apple Music", color: "var(--am)", unit: "",      link: "https://music.apple.com/" },
+  deezer:  { name: "Deezer",      color: "var(--dz)", unit: "",      link: "https://www.deezer.com/en/channels/charts", worldwide: true }
 };
+/* Keep these in step with COUNTRIES in server.js. */
+const COUNTRIES = [["ng", "Nigeria"], ["gh", "Ghana"], ["za", "South Africa"], ["ke", "Kenya"], ["gb", "United Kingdom"], ["us", "United States"]];
+const FIRST_PAGE = 10;
 
-/* Each entry: [track index, last week's rank or null for a new entry] */
-const ORDER = {
-  ng: {
-    youtube:    [[2,1],[0,3],[8,2],[5,6],[1,4],[11,null],[4,8],[7,5],[10,9],[3,12]],
-    spotify:    [[0,1],[2,2],[11,4],[1,3],[8,7],[6,5],[4,null],[9,10],[5,6],[13,9]],
-    apple:      [[11,2],[0,1],[2,3],[4,6],[8,4],[1,5],[7,null],[12,9],[6,7],[3,8]],
-    soundcloud: [[10,3],[7,1],[2,2],[12,null],[5,5],[9,4],[1,8],[13,6],[8,10],[0,7]]
-  },
-  gl: {
-    youtube:    [[3,2],[6,1],[13,3],[9,5],[0,4],[2,null],[12,7],[5,6],[7,10],[11,8]],
-    spotify:    [[6,1],[3,3],[9,2],[13,4],[2,5],[0,8],[12,6],[10,null],[1,7],[7,9]],
-    apple:      [[13,1],[3,2],[6,4],[12,3],[9,null],[0,5],[2,6],[5,8],[10,7],[8,9]],
-    soundcloud: [[12,2],[9,1],[3,null],[10,4],[13,3],[7,6],[6,5],[0,9],[11,7],[2,8]]
-  }
-};
-const REGIONS = { ng: "Nigeria", gl: "United States" };
+function regionsFor(p) { return p.worldwide ? COUNTRIES.concat([["gl", "Worldwide"]]) : COUNTRIES; }
+function regionName(p, id) {
+  const hit = regionsFor(p).find(function (r) { return r[0] === id; });
+  return hit ? hit[1] : id;
+}
 
 function sampleChart(platform, region) {
-  const p = PLATFORMS[platform];
-  const regionScale = region === "ng" ? 0.55 : 1;
-  const order = ORDER[region][platform];
-  if (!order) return [];
-  return order.map(([id, prev], i) => ({
-    rank: i + 1,
-    prev,
-    id,
-    title: TRACKS[id][0],
-    artist: TRACKS[id][1],
-    value: p.base * regionScale * Math.pow(0.9, i)
-  }));
+  const s = SAMPLE_NG[platform];
+  if (!s || region !== "ng") return [];
+  return s.order.map(function (pair, i) {
+    return {
+      rank: i + 1, prev: pair[1], id: pair[0],
+      title: TRACKS[pair[0]][0], artist: TRACKS[pair[0]][1],
+      value: s.base ? s.base * Math.pow(0.9, i) : null
+    };
+  });
 }
 
 async function loadChart(platform, region) {
@@ -230,15 +232,23 @@ function moveHtml(r) {
   return '<small class="flat">&ndash;</small>';
 }
 
-/* ---- Rendering ---- */
-const state = { platform: "youtube", region: "ng" };
+/* ---- State ---- */
+const state = { platform: "youtube", region: "ng", showAll: false };
 try {
   const h = location.hash.slice(1);
   if (PLATFORMS[h]) state.platform = h;
 } catch (e) {}
+try {
+  const saved = localStorage.getItem("chartwatch-region");
+  if (saved && COUNTRIES.concat([["gl"]]).some(function (r) { return r[0] === saved; })) state.region = saved;
+} catch (e) {}
 
 const tabsEl = document.getElementById("tabs");
-const regionEl = document.getElementById("region");
+const regionSelect = document.getElementById("region-select");
+const listEl = document.getElementById("list");
+const moreEl = document.getElementById("more");
+const moreBtn = document.getElementById("more-btn");
+let lastData = null;
 
 Object.keys(PLATFORMS).forEach(function (key) {
   const b = document.createElement("button");
@@ -247,29 +257,81 @@ Object.keys(PLATFORMS).forEach(function (key) {
   b.setAttribute("role", "tab");
   b.dataset.key = key;
   b.innerHTML = '<span class="dot" style="background:' + PLATFORMS[key].color + '"></span>' + PLATFORMS[key].name;
-  b.addEventListener("click", function () { state.platform = key; render(); try { history.replaceState(null, "", "#" + key); } catch (e) {} });
+  b.addEventListener("click", function () {
+    state.platform = key;
+    state.showAll = false;
+    render();
+    try { history.replaceState(null, "", "#" + key); } catch (e) {}
+  });
   tabsEl.appendChild(b);
 });
-Object.keys(REGIONS).forEach(function (key) {
-  const b = document.createElement("button");
-  b.type = "button";
-  b.id = "region-" + key;
-  b.dataset.key = key;
-  b.textContent = REGIONS[key];
-  b.addEventListener("click", function () { state.region = key; render(); });
-  regionEl.appendChild(b);
+regionSelect.addEventListener("change", function () {
+  state.region = regionSelect.value;
+  state.showAll = false;
+  try { localStorage.setItem("chartwatch-region", state.region); } catch (e) {}
+  render();
+});
+moreBtn.addEventListener("click", function () {
+  state.showAll = !state.showAll;
+  paint();
+  if (!state.showAll) document.getElementById("panel-title").scrollIntoView({ block: "nearest" });
 });
 
-function regionLabel(p, key) {
-  return (p.regionLabels && p.regionLabels[key]) || REGIONS[key];
+/* ---- Previews: Deezer and Apple give 30-second audio files, YouTube uses its own embedded player ---- */
+const audio = new Audio();
+audio.preload = "none";
+let nowPlaying = null;
+const ICON_PLAY = '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>';
+const ICON_STOP = '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><rect x="6" y="5" width="4" height="14" fill="currentColor"/><rect x="14" y="5" width="4" height="14" fill="currentColor"/></svg>';
+
+function setPlaying(btn, on) {
+  btn.setAttribute("aria-pressed", on ? "true" : "false");
+  btn.innerHTML = on ? ICON_STOP : ICON_PLAY;
+}
+function stopPlayback() {
+  audio.pause();
+  if (nowPlaying) {
+    if (nowPlaying.embed) nowPlaying.embed.remove();
+    if (document.body.contains(nowPlaying.btn)) setPlaying(nowPlaying.btn, false);
+    nowPlaying = null;
+  }
+}
+audio.addEventListener("ended", stopPlayback);
+audio.addEventListener("error", function () { if (nowPlaying && nowPlaying.kind === "audio") stopPlayback(); });
+
+function togglePreview(li, btn, r) {
+  if (nowPlaying && nowPlaying.btn === btn) { stopPlayback(); return; }
+  stopPlayback();
+  if (r.preview) {
+    audio.src = r.preview;
+    const p = audio.play();
+    if (p && p.catch) p.catch(function () { stopPlayback(); });
+    nowPlaying = { btn: btn, kind: "audio" };
+  } else if (r.embed) {
+    const box = document.createElement("div");
+    box.className = "embed";
+    const frame = document.createElement("iframe");
+    frame.src = "https://www.youtube-nocookie.com/embed/" + encodeURIComponent(r.embed) + "?autoplay=1&rel=0";
+    frame.title = "Preview of " + r.title;
+    frame.allow = "autoplay; encrypted-media; picture-in-picture";
+    frame.setAttribute("allowfullscreen", "");
+    const note = document.createElement("p");
+    note.textContent = "Some videos can't be played here. Use the title link to watch on YouTube.";
+    box.appendChild(frame);
+    box.appendChild(note);
+    li.appendChild(box);
+    nowPlaying = { btn: btn, kind: "video", embed: box };
+  } else {
+    return;
+  }
+  setPlaying(btn, true);
 }
 
-/* "Updated" time under the platform name. Repainted every 30 seconds so "4 min ago" stays true. */
+/* ---- "Updated" time under the platform name. Repainted every 30 seconds so "4 min ago" stays true. ---- */
 let meta = null;
 function ago(iso) {
   const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
-  if (!(mins >= 0)) return "just now";
-  if (mins < 1) return "just now";
+  if (!(mins >= 1)) return "just now";
   if (mins < 60) return mins + " min ago";
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return hrs + (hrs === 1 ? " hour ago" : " hours ago");
@@ -285,63 +347,32 @@ function paintMeta() {
 }
 setInterval(paintMeta, 30000);
 
-/* Reload the open tab every 5 minutes, and when the tab becomes visible again after a while. */
+/* Reload the open chart every 5 minutes (not while a preview is playing), and when the tab becomes visible again. */
 let lastLoad = Date.now();
-setInterval(function () { if (!document.hidden) render(); }, 5 * 60 * 1000);
+setInterval(function () { if (!document.hidden && !nowPlaying) render(); }, 5 * 60 * 1000);
 document.addEventListener("visibilitychange", function () {
-  if (!document.hidden && Date.now() - lastLoad > 5 * 60 * 1000) render();
+  if (!document.hidden && !nowPlaying && Date.now() - lastLoad > 5 * 60 * 1000) render();
 });
 
-let renderToken = 0;
-async function render() {
-  const token = ++renderToken;
+/* ---- Rendering ---- */
+function paint() {
   const p = PLATFORMS[state.platform];
-  tabsEl.querySelectorAll("button").forEach(function (b) {
-    b.setAttribute("aria-selected", b.dataset.key === state.platform ? "true" : "false");
-  });
-  regionEl.querySelectorAll("button").forEach(function (b) {
-    b.setAttribute("aria-pressed", b.dataset.key === state.region ? "true" : "false");
-    b.textContent = regionLabel(p, b.dataset.key);
-  });
-  regionEl.hidden = Boolean(p.linkOnly);
-  document.getElementById("panel-title").innerHTML = '<span class="dot" style="background:' + p.color + '"></span>' + p.name + (p.linkOnly ? " charts" : " Top 10");
-  document.getElementById("panel-link").href = p.link;
-  const list = document.getElementById("list");
+  const data = lastData;
+  stopPlayback();
+  const items = data.items;
+  const shown = state.showAll ? items : items.slice(0, FIRST_PAGE);
+  document.getElementById("panel-title").innerHTML = '<span class="dot" style="background:' + p.color + '"></span>' + p.name + " Top " + (shown.length || FIRST_PAGE);
 
-  if (p.linkOnly) {
-    document.getElementById("sample-pill").hidden = true;
-    meta = null;
-    document.getElementById("panel-meta").textContent = "No open chart data";
-    const li = document.createElement("li");
-    li.className = "note";
-    li.textContent = p.name + " does not give new developers access to its charts, so Chartwatch cannot show a ranking here. Use the link above to see the official chart on " + p.name + ".";
-    list.replaceChildren(li);
-    return;
-  }
-
-  const data = await loadChart(state.platform, state.region);
-  if (token !== renderToken) return;
-  lastLoad = Date.now();
-  const live = data.source === "live";
-  document.getElementById("sample-pill").hidden = live;
-  const fellBack = live && state.platform === "deezer" && state.region === "ng" && data.scope !== "nigeria";
-  meta = {
-    label: fellBack ? "Worldwide (Nigeria chart not found)" : regionLabel(p, state.region),
-    live: live,
-    updated: data.updated,
-    since: data.since
-  };
-  paintMeta();
-
-  const rows = data.items.map(function (r) {
+  const rows = shown.map(function (r) {
     const li = document.createElement("li");
     li.className = "row" + (r.rank <= 3 ? " top3" : "");
     li.innerHTML =
       '<div class="rank">' + r.rank + moveHtml(r) + '</div>' +
       (r.cover
-        ? '<img class="cover" alt="" src="' + encodeURI(r.cover).replace(/"/g, "%22") + '">'
+        ? '<img class="cover" alt="" loading="lazy" src="' + encodeURI(r.cover).replace(/"/g, "%22") + '">'
         : '<div class="cover" style="' + coverStyle(r.id) + '" role="img" aria-label="Sample cover art"></div>') +
       '<div class="info"><div class="title"></div><div class="artist"></div></div>' +
+      '<div class="act"></div>' +
       (r.value == null
         ? '<div class="metric"></div>'
         : '<div class="metric"><b>' + fmt(r.value) + '</b>' + (data.unit || p.unit) + '</div>');
@@ -355,6 +386,15 @@ async function render() {
       titleEl.textContent = r.title;
     }
     li.querySelector(".artist").textContent = r.artist;
+    if (r.preview || r.embed) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "play";
+      btn.setAttribute("aria-label", "Preview " + r.title);
+      setPlaying(btn, false);
+      btn.addEventListener("click", function () { togglePreview(li, btn, r); });
+      li.querySelector(".act").appendChild(btn);
+    }
     return li;
   });
   if (!rows.length) {
@@ -363,7 +403,45 @@ async function render() {
     li.textContent = "This chart could not be loaded right now. Try again in a few minutes.";
     rows.push(li);
   }
-  list.replaceChildren.apply(list, rows);
+  listEl.replaceChildren.apply(listEl, rows);
+
+  moreEl.hidden = items.length <= FIRST_PAGE;
+  moreBtn.textContent = state.showAll ? "Show top " + FIRST_PAGE : "Show top " + items.length;
+}
+
+let renderToken = 0;
+async function render() {
+  const token = ++renderToken;
+  const p = PLATFORMS[state.platform];
+  tabsEl.querySelectorAll("button").forEach(function (b) {
+    b.setAttribute("aria-selected", b.dataset.key === state.platform ? "true" : "false");
+  });
+  const regions = regionsFor(p);
+  if (!regions.some(function (r) { return r[0] === state.region; })) state.region = "ng";
+  regionSelect.replaceChildren.apply(regionSelect, regions.map(function (r) {
+    const o = document.createElement("option");
+    o.value = r[0];
+    o.textContent = r[1];
+    return o;
+  }));
+  regionSelect.value = state.region;
+  document.getElementById("panel-link").href = p.link;
+
+  const data = await loadChart(state.platform, state.region);
+  if (token !== renderToken) return;
+  lastLoad = Date.now();
+  lastData = data;
+  const live = data.source === "live";
+  document.getElementById("sample-pill").hidden = live;
+  const fellBack = live && state.platform === "deezer" && state.region !== "gl" && data.scope !== "country";
+  meta = {
+    label: fellBack ? "Worldwide (" + regionName(p, state.region) + " chart not found)" : regionName(p, state.region),
+    live: live,
+    updated: data.updated,
+    since: data.since
+  };
+  paintMeta();
+  paint();
 }
 render();
 </script>
