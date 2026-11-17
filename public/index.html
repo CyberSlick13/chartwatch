@@ -22,6 +22,7 @@
   --sp: #1db45a;
   --am: #f2476a;
   --sc: #ff6a1a;
+  --dz: #9b5cf6;
   --font-display: "Space Grotesk", "Helvetica Neue", Arial, sans-serif;
   --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
   color-scheme: light;
@@ -97,6 +98,8 @@ img.cover { object-fit: cover; display: block; }
 .metric { text-align: right; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .metric b { display: block; color: var(--fg); font-weight: 600; font-size: 14px; }
 
+.note { padding: 28px 20px; color: var(--muted); text-align: center; text-wrap: balance; }
+.note a { color: var(--accent); font-weight: 500; }
 .foot { color: var(--muted); font-size: 13px; max-width: 62ch; }
 .foot code { font-size: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; }
 
@@ -117,7 +120,7 @@ img.cover { object-fit: cover; display: block; }
   <header class="top">
     <div>
       <h1>Chartwatch</h1>
-      <p class="lede">The week's top tracks on YouTube, Spotify, Apple Music and SoundCloud, side by side.</p>
+      <p class="lede">Top tracks from YouTube, Apple Music and Deezer, with links to the Spotify and SoundCloud charts.</p>
     </div>
     <span class="sample" id="sample-pill">Sample data</span>
   </header>
@@ -136,7 +139,7 @@ img.cover { object-fit: cover; display: block; }
     <ol id="list"></ol>
   </section>
 
-  <p class="foot">Live charts come from your own server. Platforms that are not connected yet show made-up sample data, marked with a tag at the top.</p>
+  <p class="foot">Charts refresh from each platform about once an hour. Spotify and SoundCloud do not offer open chart data to new developers, so those tabs link to their own charts. Deezer is a separate service and is not a stand-in for either one. If a chart cannot load, the page shows made-up sample data with a tag at the top.</p>
 </div>
 
 <script>
@@ -160,9 +163,10 @@ const TRACKS = [
 
 const PLATFORMS = {
   youtube:    { name: "YouTube",     color: "var(--yt)", unit: "views",   base: 9.8e6, link: "https://charts.youtube.com/" },
-  spotify:    { name: "Spotify",     color: "var(--sp)", unit: "streams", base: 6.4e6, link: "https://charts.spotify.com/" },
+  spotify:    { name: "Spotify",     color: "var(--sp)", unit: "streams", base: 6.4e6, link: "https://charts.spotify.com/", linkOnly: true },
   apple:      { name: "Apple Music", color: "var(--am)", unit: "points",      base: 980,   link: "https://music.apple.com/" },
-  soundcloud: { name: "SoundCloud",  color: "var(--sc)", unit: "plays",   base: 2.1e6, link: "https://soundcloud.com/charts/top" }
+  soundcloud: { name: "SoundCloud",  color: "var(--sc)", unit: "plays",   base: 2.1e6, link: "https://soundcloud.com/charts/top", linkOnly: true },
+  deezer:     { name: "Deezer",      color: "var(--dz)", unit: "",        base: 0,     link: "https://www.deezer.com/en/channels/charts", global: true }
 };
 
 /* Each entry: [track index, last week's rank or null for a new entry] */
@@ -185,7 +189,9 @@ const REGIONS = { ng: "Nigeria", gl: "United States" };
 function sampleChart(platform, region) {
   const p = PLATFORMS[platform];
   const regionScale = region === "ng" ? 0.55 : 1;
-  return ORDER[region][platform].map(([id, prev], i) => ({
+  const order = ORDER[region][platform];
+  if (!order) return [];
+  return order.map(([id, prev], i) => ({
     rank: i + 1,
     prev,
     id,
@@ -262,13 +268,26 @@ async function render() {
   regionEl.querySelectorAll("button").forEach(function (b) {
     b.setAttribute("aria-pressed", b.dataset.key === state.region ? "true" : "false");
   });
-  document.getElementById("panel-title").innerHTML = '<span class="dot" style="background:' + p.color + '"></span>' + p.name + " Top 10";
+  regionEl.hidden = Boolean(p.global || p.linkOnly);
+  document.getElementById("panel-title").innerHTML = '<span class="dot" style="background:' + p.color + '"></span>' + p.name + (p.linkOnly ? " charts" : " Top 10");
   document.getElementById("panel-link").href = p.link;
+  const list = document.getElementById("list");
+
+  if (p.linkOnly) {
+    document.getElementById("sample-pill").hidden = true;
+    document.getElementById("panel-meta").textContent = "No open chart data";
+    const li = document.createElement("li");
+    li.className = "note";
+    li.textContent = p.name + " does not give new developers access to its charts, so Chartwatch cannot show a ranking here. Use the link above to see the official chart on " + p.name + ".";
+    list.replaceChildren(li);
+    return;
+  }
+
   const data = await loadChart(state.platform, state.region);
   if (token !== renderToken) return;
   const live = data.source === "live";
   document.getElementById("sample-pill").hidden = live;
-  document.getElementById("panel-meta").textContent = REGIONS[state.region] + " · " +
+  document.getElementById("panel-meta").textContent = (p.global ? "Worldwide" : REGIONS[state.region]) + " · " +
     (live ? "updated " + new Date(data.updated).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "sample data") +
     (live && data.since ? " · moves since " + new Date(data.since + "T00:00:00Z").toLocaleDateString([], { month: "short", day: "numeric", timeZone: "UTC" }) : "");
 
@@ -296,7 +315,12 @@ async function render() {
     li.querySelector(".artist").textContent = r.artist;
     return li;
   });
-  const list = document.getElementById("list");
+  if (!rows.length) {
+    const li = document.createElement("li");
+    li.className = "note";
+    li.textContent = "This chart could not be loaded right now. Try again in a few minutes.";
+    rows.push(li);
+  }
   list.replaceChildren.apply(list, rows);
 }
 render();
