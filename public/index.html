@@ -166,7 +166,7 @@ const PLATFORMS = {
   spotify:    { name: "Spotify",     color: "var(--sp)", unit: "streams", base: 6.4e6, link: "https://charts.spotify.com/", linkOnly: true },
   apple:      { name: "Apple Music", color: "var(--am)", unit: "points",      base: 980,   link: "https://music.apple.com/" },
   soundcloud: { name: "SoundCloud",  color: "var(--sc)", unit: "plays",   base: 2.1e6, link: "https://soundcloud.com/charts/top", linkOnly: true },
-  deezer:     { name: "Deezer",      color: "var(--dz)", unit: "",        base: 0,     link: "https://www.deezer.com/en/channels/charts", global: true }
+  deezer:     { name: "Deezer",      color: "var(--dz)", unit: "",        base: 0,     link: "https://www.deezer.com/en/channels/charts", regionLabels: { ng: "Nigeria", gl: "Worldwide" } }
 };
 
 /* Each entry: [track index, last week's rank or null for a new entry] */
@@ -258,6 +258,38 @@ Object.keys(REGIONS).forEach(function (key) {
   regionEl.appendChild(b);
 });
 
+function regionLabel(p, key) {
+  return (p.regionLabels && p.regionLabels[key]) || REGIONS[key];
+}
+
+/* "Updated" time under the platform name. Repainted every 30 seconds so "4 min ago" stays true. */
+let meta = null;
+function ago(iso) {
+  const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+  if (!(mins >= 0)) return "just now";
+  if (mins < 1) return "just now";
+  if (mins < 60) return mins + " min ago";
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return hrs + (hrs === 1 ? " hour ago" : " hours ago");
+  return new Date(iso).toLocaleDateString([], { month: "short", day: "numeric" });
+}
+function paintMeta() {
+  if (!meta) return;
+  const el = document.getElementById("panel-meta");
+  el.textContent = meta.label + " · " +
+    (meta.live ? "updated " + ago(meta.updated) : "sample data") +
+    (meta.live && meta.since ? " · moves since " + new Date(meta.since + "T00:00:00Z").toLocaleDateString([], { month: "short", day: "numeric", timeZone: "UTC" }) : "");
+  el.title = meta.live ? "Fetched " + new Date(meta.updated).toLocaleString() : "";
+}
+setInterval(paintMeta, 30000);
+
+/* Reload the open tab every 5 minutes, and when the tab becomes visible again after a while. */
+let lastLoad = Date.now();
+setInterval(function () { if (!document.hidden) render(); }, 5 * 60 * 1000);
+document.addEventListener("visibilitychange", function () {
+  if (!document.hidden && Date.now() - lastLoad > 5 * 60 * 1000) render();
+});
+
 let renderToken = 0;
 async function render() {
   const token = ++renderToken;
@@ -267,14 +299,16 @@ async function render() {
   });
   regionEl.querySelectorAll("button").forEach(function (b) {
     b.setAttribute("aria-pressed", b.dataset.key === state.region ? "true" : "false");
+    b.textContent = regionLabel(p, b.dataset.key);
   });
-  regionEl.hidden = Boolean(p.global || p.linkOnly);
+  regionEl.hidden = Boolean(p.linkOnly);
   document.getElementById("panel-title").innerHTML = '<span class="dot" style="background:' + p.color + '"></span>' + p.name + (p.linkOnly ? " charts" : " Top 10");
   document.getElementById("panel-link").href = p.link;
   const list = document.getElementById("list");
 
   if (p.linkOnly) {
     document.getElementById("sample-pill").hidden = true;
+    meta = null;
     document.getElementById("panel-meta").textContent = "No open chart data";
     const li = document.createElement("li");
     li.className = "note";
@@ -285,11 +319,17 @@ async function render() {
 
   const data = await loadChart(state.platform, state.region);
   if (token !== renderToken) return;
+  lastLoad = Date.now();
   const live = data.source === "live";
   document.getElementById("sample-pill").hidden = live;
-  document.getElementById("panel-meta").textContent = (p.global ? "Worldwide" : REGIONS[state.region]) + " · " +
-    (live ? "updated " + new Date(data.updated).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "sample data") +
-    (live && data.since ? " · moves since " + new Date(data.since + "T00:00:00Z").toLocaleDateString([], { month: "short", day: "numeric", timeZone: "UTC" }) : "");
+  const fellBack = live && state.platform === "deezer" && state.region === "ng" && data.scope !== "nigeria";
+  meta = {
+    label: fellBack ? "Worldwide (Nigeria chart not found)" : regionLabel(p, state.region),
+    live: live,
+    updated: data.updated,
+    since: data.since
+  };
+  paintMeta();
 
   const rows = data.items.map(function (r) {
     const li = document.createElement("li");
