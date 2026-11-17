@@ -20,6 +20,11 @@ const PORT = Number(process.env.PORT) || 3000;
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "data");
 const HISTORY_FILE = path.join(DATA_DIR, "history.json");
+// Optional free online store for the daily history (Upstash Redis). Without it, a local file is used.
+const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL;
+const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
+const USE_REDIS = Boolean(REDIS_URL && REDIS_TOKEN);
+const HISTORY_KEY = "chartwatch:history";
 const CACHE_MS = 60 * 60 * 1000; // refresh each chart at most once an hour
 const KEEP_DAYS = 14; // how many daily snapshots to remember per chart
 
@@ -32,13 +37,46 @@ const cache = new Map();
 /* ---------- Daily snapshots, used for the up/down/NEW markers ---------- */
 
 let history = {};
-try {
-  history = JSON.parse(fs.readFileSync(HISTORY_FILE, "utf8"));
-} catch (e) {
-  history = {};
+let historyLoaded = false; // stays false if the online store could not be read, so we never overwrite it with an empty copy
+
+async function redis(command) {
+  const res = await fetch(REDIS_URL, {
+    method: "POST",
+    headers: { Authorization: "Bearer " + REDIS_TOKEN, "Content-Type": "application/json" },
+    body: JSON.stringify(command)
+  });
+  if (!res.ok) throw new Error("Redis responded " + res.status);
+  const json = await res.json();
+  if (json.error) throw new Error(json.error);
+  return json.result;
+}
+
+async function loadHistory() {
+  try {
+    if (USE_REDIS) {
+      const stored = await redis(["GET", HISTORY_KEY]);
+      history = stored ? JSON.parse(stored) : {};
+    } else {
+      try {
+        history = JSON.parse(fs.readFileSync(HISTORY_FILE, "utf8"));
+      } catch (e) {
+        history = {}; // no file yet
+      }
+    }
+    historyLoaded = true;
+  } catch (e) {
+    console.error("Could not load history:", e.message);
+  }
 }
 
 function saveHistory() {
+  if (!historyLoaded) return;
+  if (USE_REDIS) {
+    redis(["SET", HISTORY_KEY, JSON.stringify(history)]).catch(function (e) {
+      console.error("Could not save history:", e.message);
+    });
+    return;
+  }
   try {
     fs.mkdirSync(DATA_DIR, { recursive: true });
     const tmp = HISTORY_FILE + ".tmp";
@@ -132,10 +170,10 @@ async function appleChart(region) {
 // One entry per connected platform. Spotify and SoundCloud can be added here later.
 const FETCHERS = { youtube: youtubeChart, apple: appleChart };
 
-async function getChart(platform, region) {
+async function getChart(platform, region, force) {
   const key = platform + ":" + region;
   const hit = cache.get(key);
-  if (hit && Date.now() - hit.at < CACHE_MS) return hit.data;
+  if (!force && hit && Date.now() - hit.at < CACHE_MS) return hit.data;
   try {
     const data = await FETCHERS[platform](region);
     const since = applyMovement(key, data.items);
@@ -195,6 +233,7 @@ const server = http.createServer(async function (req, res) {
   const url = new URL(req.url, "http://localhost");
   const m = url.pathname.match(/^\/api\/charts\/([a-z]+)$/);
 
+  if (url.pathname === "/health") return sendJson(res, 200, { ok: true });
   if (!m) return serveStatic(url.pathname, res);
   if (req.method !== "GET") return sendJson(res, 405, { error: "method_not_allowed" });
 
@@ -213,7 +252,27 @@ const server = http.createServer(async function (req, res) {
   }
 });
 
-server.listen(PORT, function () {
-  console.log("Chartwatch running at http://localhost:" + PORT);
-  if (!YOUTUBE_API_KEY) console.log("No YOUTUBE_API_KEY set, so YouTube shows sample data.");
+// Refreshes every connected chart on a timer, so history is saved and charts stay warm even with no visitors.
+async function refreshAll() {
+  if (!historyLoaded) await loadHistory();
+  for (const platform of Object.keys(FETCHERS)) {
+    if (platform === "youtube" && !YOUTUBE_API_KEY) continue;
+    for (const region of Object.keys(YOUTUBE_REGIONS)) {
+      try {
+        await getChart(platform, region, true);
+      } catch (err) {
+        console.error("refresh", platform, region, err.message);
+      }
+    }
+  }
+}
+
+loadHistory().then(function () {
+  server.listen(PORT, function () {
+    console.log("Chartwatch running at http://localhost:" + PORT);
+    console.log("History is stored " + (USE_REDIS ? "in Upstash Redis." : "in " + HISTORY_FILE + "."));
+    if (!YOUTUBE_API_KEY) console.log("No YOUTUBE_API_KEY set, so YouTube shows sample data.");
+    refreshAll();
+    setInterval(refreshAll, CACHE_MS);
+  });
 });

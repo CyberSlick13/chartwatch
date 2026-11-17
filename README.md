@@ -13,25 +13,36 @@ Without a key the page still works. YouTube shows sample data, and Apple Music n
 ## How it works
 
 - `server.js` fetches each chart, keeps the result for an hour, and serves it at `/api/charts/<platform>?region=ng`.
+- Once an hour the server also refreshes every chart by itself, so history is saved and charts stay fresh even when nobody visits.
 - `public/index.html` asks the server for each chart. If the server has nothing for a platform (or is down), the page falls back to made-up sample data and shows a "Sample data" tag.
-- The key stays on the server and is never sent to the browser.
+- The keys stay on the server and are never sent to the browser.
 - YouTube lists show view counts. Apple's feed gives a ranking only, so Apple rows have no number.
+- `/health` answers `{"ok":true}`. It exists so a pinger can keep a free host awake.
 
 ### Movement arrows
 
-Each chart's ranks are saved once a day to `data/history.json`. When the server fetches a chart, it compares it with the last saved day and marks each row up, down, unchanged or NEW. The header says which day it compared against. Nothing shows until the server has saved at least two different days. Days are counted in UTC.
+Each chart's ranks are saved once a day. The server compares the latest chart with the last saved day and marks each row up, down, unchanged or NEW. The header says which day it compared against. Nothing shows until two different days have been saved. Days are counted in UTC.
+
+Where the history is saved:
+- On your computer: `data/history.json`.
+- When hosted: an Upstash Redis database, used automatically whenever `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` are set. If the database can't be reached at startup, the server serves charts without arrows and does not overwrite the saved history.
+
+## Hosting it online for free, always on
+
+Three free services work together: Render runs the server, Upstash keeps the history, and an uptime pinger stops Render from sleeping.
+
+1. **Upstash.** Sign up at upstash.com and create a Redis database on the free plan. On its page, copy the REST URL and the REST token.
+2. **GitHub.** Create a repository and push this folder to it. `.gitignore` already keeps `.env` and `data/` out.
+3. **Render.** On render.com choose New, then Blueprint, and select the repository. `render.yaml` sets everything up. When asked, enter three values: `YOUTUBE_API_KEY`, `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`. Deploy and note the `onrender.com` address.
+4. **Pinger.** Sign up for a free uptime service such as UptimeRobot or cron-job.org and add a check for `https://YOUR-SERVICE.onrender.com/health` every 5 minutes. Render puts free services to sleep after 15 minutes without traffic, so any interval under 15 minutes keeps it awake.
+
+Things to know:
+- Render's free plan gives each workspace 750 free hours a month, which covers one always-on service. Don't run other free web services in the same workspace.
+- Render may restart the service at any time. That's fine, because history lives in Upstash and the server reloads it at startup.
+- The Upstash free plan allows 500,000 commands a month. Chartwatch uses a few thousand.
+- Free plans change. Check Render's and Upstash's current free-plan pages if something stops working.
+- Treat the YouTube key and the Upstash token like passwords. Never commit them to GitHub.
 
 ## Adding the next platform
 
-Add a function to `FETCHERS` in `server.js` that returns `{ unit, items: [{ id, rank, title, artist, value, cover, url }] }`. Use `value: null` when a platform has no count. The page and the movement arrows pick it up with no other changes.
-
-## Putting it online (Render)
-
-1. Create a GitHub repository and push this folder to it. `.gitignore` already keeps `.env` and `data/` out.
-2. On render.com choose New, then Blueprint (or Web Service), and select the repository. `render.yaml` sets everything up.
-3. When asked, enter `YOUTUBE_API_KEY` as an environment variable. Don't commit the key.
-4. Deploy, then open the `onrender.com` address Render gives you.
-
-On Render's free plan:
-- The service goes to sleep when nobody visits, so the first load after a quiet spell takes up to a minute.
-- Its disk is wiped when the service restarts or sleeps, so `data/history.json` is lost and movement arrows start over. To keep the history, add a Render persistent disk (a paid feature) mounted at `/var/data` and set `DATA_DIR=/var/data`.
+Add a function to `FETCHERS` in `server.js` that returns `{ unit, items: [{ id, rank, title, artist, value, cover, url }] }`. Use `value: null` when a platform has no count. The page, the hourly refresh and the movement arrows pick it up with no other changes.
