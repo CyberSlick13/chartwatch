@@ -117,6 +117,7 @@ button.play { width: 34px; height: 34px; padding: 0; border-radius: 50%; justify
   h1 { font-size: 1.6rem; }
   li.row { grid-template-columns: 2rem 44px minmax(0, 1fr) 34px auto; gap: 8px; padding: 10px 12px; }
   .cover { width: 44px; height: 44px; }
+  .metric { white-space: normal; max-width: 3.6rem; }
   .panel-head { padding: 14px 12px 10px; }
 }
 @media (prefers-reduced-motion: no-preference) {
@@ -179,7 +180,7 @@ const SAMPLE_NG = {
 };
 
 const PLATFORMS = {
-  youtube: { name: "YouTube",     color: "var(--yt)", unit: "views", link: "https://charts.youtube.com/" },
+  youtube: { name: "YouTube",     color: "var(--yt)", unit: "total views", link: "https://charts.youtube.com/" },
   apple:   { name: "Apple Music", color: "var(--am)", unit: "",      link: "https://music.apple.com/" },
   deezer:  { name: "Deezer",      color: "var(--dz)", unit: "",      link: "https://www.deezer.com/en/channels/charts", worldwide: true }
 };
