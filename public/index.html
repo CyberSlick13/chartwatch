@@ -353,6 +353,7 @@ function setPlaying(btn, on) {
 function stopPlayback() {
   audio.pause();
   if (nowPlaying) {
+    clearTimeout(nowPlaying.timer);
     if (nowPlaying.embed) nowPlaying.embed.remove();
     if (nowPlaying.li) nowPlaying.li.classList.remove("is-playing");
     if (document.body.contains(nowPlaying.btn)) setPlaying(nowPlaying.btn, false);
@@ -374,7 +375,10 @@ function togglePreview(li, btn, r) {
     const box = document.createElement("div");
     box.className = "embed";
     const frame = document.createElement("iframe");
-    frame.src = "https://www.youtube-nocookie.com/embed/" + encodeURIComponent(r.embed) + "?autoplay=1&rel=0";
+    // Play only a 30-second slice: the player is told where to start and stop, and the page closes it after 30 seconds as well.
+    const start = Math.max(0, Math.floor(r.previewStart || 0));
+    frame.src = "https://www.youtube-nocookie.com/embed/" + encodeURIComponent(r.embed) +
+      "?autoplay=1&rel=0&playsinline=1&iv_load_policy=3&start=" + start + "&end=" + (start + 30);
     frame.title = "Preview of " + r.title;
     frame.allow = "autoplay; encrypted-media; picture-in-picture";
     frame.setAttribute("allowfullscreen", "");
@@ -384,6 +388,7 @@ function togglePreview(li, btn, r) {
     box.appendChild(note);
     li.appendChild(box);
     nowPlaying = { btn: btn, li: li, kind: "video", embed: box };
+    nowPlaying.timer = setTimeout(stopPlayback, 31000);
   } else {
     return;
   }
