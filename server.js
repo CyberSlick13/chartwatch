@@ -179,7 +179,7 @@ async function youtubeChart(region) {
     };
   });
   if (!items.length) throw new Error("YouTube returned no videos");
-  return { unit: "views", items: items };
+  return { unit: "total views", items: items };
 }
 
 // Apple's feed gives a ranking but no previews, so previews come from Apple's public lookup. If that fails, rows just have no play button.
