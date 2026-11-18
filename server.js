@@ -149,10 +149,22 @@ function applyMovement(key, items) {
 // Each returns { unit, items: [{ id, rank, title, artist, value, cover, url, preview?, embed? }] }.
 // "preview" is a 30-second audio file. "embed" is a YouTube video id for the official embedded player.
 
+// "PT3M45S" -> 225 seconds.
+function isoSeconds(iso) {
+  const m = /^P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/.exec(iso || "");
+  if (!m) return 0;
+  return (+m[1] || 0) * 86400 + (+m[2] || 0) * 3600 + (+m[3] || 0) * 60 + (+m[4] || 0);
+}
+// Where a 30-second YouTube preview starts: a quarter of the way in, which skips most intros.
+function previewStart(totalSeconds) {
+  if (!totalSeconds) return 0;
+  return Math.max(0, Math.min(Math.floor(totalSeconds * 0.25), totalSeconds - 35, 90));
+}
+
 async function youtubeChart(region) {
   const url = new URL("https://www.googleapis.com/youtube/v3/videos");
   url.search = new URLSearchParams({
-    part: "snippet,statistics",
+    part: "snippet,statistics,contentDetails",
     chart: "mostPopular",
     videoCategoryId: "10", // Music
     regionCode: COUNTRIES[region].yt,
@@ -175,7 +187,8 @@ async function youtubeChart(region) {
       value: Number(v.statistics && v.statistics.viewCount) || 0,
       cover: thumb.url || null,
       url: "https://www.youtube.com/watch?v=" + v.id,
-      embed: v.id
+      embed: v.id,
+      previewStart: previewStart(isoSeconds(v.contentDetails && v.contentDetails.duration))
     };
   });
   if (!items.length) throw new Error("YouTube returned no videos");
