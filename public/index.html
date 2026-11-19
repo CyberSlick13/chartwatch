@@ -4,6 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Chartwatch</title>
+<!-- Opening splash. This runs first so the page content is hidden before the first paint; the timer is a failsafe so it can never stay hidden. -->
+<script>
+  document.documentElement.classList.add("splash-on");
+  setTimeout(function () { document.documentElement.classList.remove("splash-on"); }, 6000);
+</script>
+<noscript><style>html.splash-on [data-reveal] { opacity: 1 !important; transform: none !important; } .splash { display: none !important; }</style></noscript>
+<link rel="preload" as="image" href="/logos/chartwatch-wordmark.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Unbounded:wght@600;700&display=swap">
@@ -192,35 +199,56 @@ li.row.feature button.play { width: 44px; height: 44px; }
   li.row:hover { background: color-mix(in srgb, var(--plat) 6%, transparent); }
   li.row.enter { animation: rowin 0.4s cubic-bezier(0.2, 0.7, 0.2, 1) both; animation-delay: calc(var(--i, 0) * 35ms); }
   @keyframes rowin { from { opacity: 0; transform: translateY(8px); } }
-  /* Opening animation: the logo bars rise like an equalizer, the name fades in, then the #1 card and rows follow. Plays once per visit. */
-  .bar { transform-box: fill-box; transform-origin: 50% 100%; animation: barup 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
-  .b1 { animation-delay: 0.05s; } .b2 { animation-delay: 0.15s; } .b3 { animation-delay: 0.25s; }
-  @keyframes barup { from { transform: scaleY(0.12); opacity: 0; } }
-  .word { animation: wordin 0.6s ease 0.3s both; }
-  @keyframes wordin { from { opacity: 0; transform: translateX(-8px); } }
-  .lede, .controls { animation: wordin 0.6s ease 0.45s both; }
-  body.intro li.row.feature.enter { animation-duration: 0.6s; animation-delay: 0.5s; }
-  body.intro li.row.enter:not(.feature) { animation-delay: calc(0.7s + var(--i, 0) * 35ms); }
+}
+
+/* ---- Opening splash: the logo bars rise like an equalizer, the wordmark blurs in, then the page slides up. ---- */
+:root { --ios: cubic-bezier(.32, .72, 0, 1); --ios-out: cubic-bezier(.22, 1, .36, 1); }
+html.splash-on { overflow: hidden; }
+.splash {
+  position: fixed; inset: 0; z-index: 9999; display: grid; place-items: center;
+  background: #151318; /* the logo's own dark, in both themes */
+  transition: opacity 520ms ease 260ms;
+}
+.s-logo { position: relative; width: min(70vw, 340px); aspect-ratio: 464 / 67; animation: logoIn 950ms var(--ios) 120ms both; will-change: transform, opacity, filter; }
+.s-word { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.splash.is-leaving { opacity: 0; pointer-events: none; }
+.splash.is-leaving .s-logo { animation: logoOut 480ms cubic-bezier(.4, 0, 1, 1) both; }
+.sbar { position: absolute; background: #e5342b; border-radius: 999px; transform-origin: 50% 100%; will-change: transform; }
+.sb1 { left: 3.448%; width: 2.457%; top: 48.18%; height: 31.58%; animation: barRise 650ms var(--ios) 280ms both, barPulse 1.00s ease-in-out  930ms infinite; --lo: .50; }
+.sb2 { left: 6.815%; width: 2.485%; top: 18.87%; height: 60.97%; animation: barRise 650ms var(--ios) 360ms both, barPulse 1.25s ease-in-out 1010ms infinite; --lo: .55; }
+.sb3 { left: 10.151%; width: 2.457%; top: 33.51%; height: 46.27%; animation: barRise 650ms var(--ios) 440ms both, barPulse 1.10s ease-in-out 1090ms infinite; --lo: .45; }
+@keyframes barRise  { from { transform: scaleY(.08); } to { transform: scaleY(1); } }
+@keyframes barPulse { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(var(--lo, .5)); } }
+@keyframes logoIn  { from { opacity: 0; transform: scale(.88); filter: blur(14px); } to { opacity: 1; transform: scale(1); filter: blur(0); } }
+@keyframes logoOut { from { opacity: 1; transform: scale(1); filter: blur(0); } to { opacity: 0; transform: scale(1.08); filter: blur(10px); } }
+[data-reveal] { transition: opacity .75s var(--ios-out) calc(var(--i, 0) * 70ms), transform .95s var(--ios) calc(var(--i, 0) * 70ms); }
+html.splash-on [data-reveal] { opacity: 0; transform: translateY(34px) scale(.985); }
+@media (prefers-reduced-motion: reduce) {
+  .splash, .splash * { animation: none !important; transition: none !important; }
+  [data-reveal] { transition: none !important; }
 }
 </style>
 </head>
-<body class="intro">
+<body>
+<div class="splash" id="splash" aria-hidden="true">
+  <div class="s-logo"><i class="sbar sb1"></i><i class="sbar sb2"></i><i class="sbar sb3"></i><img class="s-word" src="/logos/chartwatch-wordmark.png" alt="" width="464" height="67"></div>
+</div>
 <canvas id="bg" aria-hidden="true"></canvas>
 <div class="wrap">
-  <header class="top">
+  <header class="top" data-reveal style="--i:0">
     <div>
-      <h1><svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><rect class="bar b1" x="3" y="16" width="7" height="13" rx="3.5" fill="currentColor"/><rect class="bar b2" x="12.5" y="4" width="7" height="25" rx="3.5" fill="currentColor"/><rect class="bar b3" x="22" y="10" width="7" height="19" rx="3.5" fill="currentColor"/></svg><span class="word">Chartwatch</span></h1>
+      <h1><svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="16" width="7" height="13" rx="3.5" fill="currentColor"/><rect x="12.5" y="4" width="7" height="25" rx="3.5" fill="currentColor"/><rect x="22" y="10" width="7" height="19" rx="3.5" fill="currentColor"/></svg>Chartwatch</h1>
       <p class="lede">Top tracks from YouTube, Apple Music and Deezer, with 30-second previews.</p>
     </div>
     <span class="sample" id="sample-pill">Sample data</span>
   </header>
 
-  <div class="controls">
+  <div class="controls" data-reveal style="--i:1">
     <div class="tabs" role="tablist" aria-label="Platform" id="tabs"></div>
     <select id="region-select" aria-label="Region"></select>
   </div>
 
-  <section class="panel" aria-live="polite">
+  <section class="panel" aria-live="polite" data-reveal style="--i:2">
     <div class="panel-head">
       <h2 id="panel-title"></h2>
       <span class="meta" id="panel-meta"></span>
@@ -230,7 +258,7 @@ li.row.feature button.play { width: 44px; height: 44px; }
     <div class="more" id="more" hidden><button type="button" id="more-btn">Show top 50</button></div>
   </section>
 
-  <p class="foot-note">Charts refresh from each platform about once an hour. Spotify and SoundCloud do not offer open chart data to new developers, so they are not listed here. Their official charts: <a href="https://charts.spotify.com/" target="_blank" rel="noopener">Spotify</a> and <a href="https://soundcloud.com/charts/top" target="_blank" rel="noopener">SoundCloud</a>. Deezer is a separate service. If a chart cannot load, the page may show made-up sample data with a tag at the top.</p>
+  <p class="foot-note" data-reveal style="--i:3">Charts refresh from each platform about once an hour. Spotify and SoundCloud do not offer open chart data to new developers, so they are not listed here. Their official charts: <a href="https://charts.spotify.com/" target="_blank" rel="noopener">Spotify</a> and <a href="https://soundcloud.com/charts/top" target="_blank" rel="noopener">SoundCloud</a>. Deezer is a separate service. If a chart cannot load, the page may show made-up sample data with a tag at the top.</p>
 </div>
 
 <script>
@@ -332,7 +360,6 @@ const listEl = document.getElementById("list");
 const moreEl = document.getElementById("more");
 const moreBtn = document.getElementById("more-btn");
 let lastData = null;
-setTimeout(function () { document.body.classList.remove("intro"); }, 2500); // the opening delays apply to the first load only
 let animateNext = true; // rows fade in after a tab or country change, not on the 5-minute refresh
 
 Object.keys(PLATFORMS).forEach(function (key) {
@@ -668,6 +695,26 @@ render();
     draw(now);
   }
   requestAnimationFrame(frame);
+})();
+</script>
+<script>
+/* Splash timeline. Change HOLD_MS to make the splash shorter or longer; SHOW_ONCE_PER_SESSION = true plays it only on a visitor's first page load. */
+(function () {
+  var SHOW_ONCE_PER_SESSION = false;
+  var HOLD_MS = 1800;   // how long the splash stays before it starts leaving
+  var LEAVE_MS = 650;   // time until the page content starts sliding in
+  var root = document.documentElement, splash = document.getElementById("splash");
+  function finish() {
+    root.classList.remove("splash-on");
+    if (splash) setTimeout(function () { splash.remove(); }, 900);
+  }
+  var reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var seen = false;
+  try { seen = SHOW_ONCE_PER_SESSION && sessionStorage.getItem("cw-splash") === "1"; } catch (e) {}
+  if (!splash || reduce || seen) { finish(); return; }
+  try { sessionStorage.setItem("cw-splash", "1"); } catch (e) {}
+  setTimeout(function () { splash.classList.add("is-leaving"); }, HOLD_MS);
+  setTimeout(finish, HOLD_MS + LEAVE_MS);
 })();
 </script>
 </body>
