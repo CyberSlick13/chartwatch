@@ -28,6 +28,10 @@ Without a key the page still works. YouTube shows sample data for Nigeria only, 
 - Countries are listed in `COUNTRIES` in `server.js` (and the same list in `public/index.html`). To add one, add it to both. Not every platform publishes a chart for every country.
 - Deezer's country charts are Deezer's own "Top <country>" playlists, found by name. If one can't be found, the page shows Deezer's worldwide chart and says so.
 
+### Install icon
+
+`public/manifest.webmanifest` and `public/icons/` give the page a name and an icon, so "Add to Home screen" installs it as Chartwatch with the red bars.
+
 ### Platform logos
 
 Opening splash: a dark screen where the logo bars rise and pulse, the wordmark blurs in, then the page slides up (about 2.5 seconds, skipped for reduced-motion users). The timings (`HOLD_MS`, `LEAVE_MS`, `SHOW_ONCE_PER_SESSION`) are in the script at the bottom of `public/index.html`, and the artwork is `public/logos/chartwatch-wordmark.png`.
