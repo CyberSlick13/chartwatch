@@ -94,6 +94,18 @@ select {
 .panel-head { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; justify-content: space-between; padding: 18px 20px 14px; border-bottom: 1px solid var(--line); }
 .panel-head h2 { font-family: var(--font-display); font-weight: 600; font-size: 1.05rem; letter-spacing: -0.02em; margin: 0; display: flex; align-items: center; gap: 10px; }
 .panel-head .meta { color: var(--muted); font-size: 13px; }
+/* Official logos are shown as supplied. The light-page version is the default; the dark-page version replaces it in dark mode. */
+.plat-logo { display: block; margin-right: 4px; }
+.logo-dark { display: none; }
+/* A logo that only exists in a dark-text version sits on a white badge in dark mode. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .logo-light { display: none; }
+  :root:not([data-theme="light"]) .logo-dark { display: block; }
+  :root:not([data-theme="light"]) .logo-chip { background: #fff; padding: 5px 9px; border-radius: 9px; box-sizing: content-box; }
+}
+:root[data-theme="dark"] .logo-light { display: none; }
+:root[data-theme="dark"] .logo-dark { display: block; }
+:root[data-theme="dark"] .logo-chip { background: #fff; padding: 5px 9px; border-radius: 9px; box-sizing: content-box; }
 .panel-head a { color: var(--accent); font-size: 13px; font-weight: 500; text-decoration: none; }
 .panel-head a:hover { text-decoration: underline; }
 
@@ -237,9 +249,13 @@ const SAMPLE_NG = {
 };
 
 const PLATFORMS = {
-  youtube: { name: "YouTube",     color: "var(--yt)", unit: "total views", link: "https://charts.youtube.com/" },
-  apple:   { name: "Apple Music", color: "var(--am)", unit: "",      link: "https://music.apple.com/" },
-  deezer:  { name: "Deezer",      color: "var(--dz)", unit: "",      link: "https://www.deezer.com/en/channels/charts", worldwide: true }
+  // "logo" holds the platform's official artwork, unaltered: one version for light pages, one for dark. Add it when a platform's files are in /logos.
+  youtube: { name: "YouTube",     color: "var(--yt)", unit: "total views", link: "https://charts.youtube.com/",
+             logo: { light: "/logos/youtube-light.png", dark: "/logos/youtube-dark.png", ratio: 4.472 } },
+  apple:   { name: "Apple Music", color: "var(--am)", unit: "",      link: "https://music.apple.com/",
+             logo: { light: "/logos/apple-music.svg", dark: "/logos/apple-music.svg", ratio: 1, h: 28, textName: true } },
+  deezer:  { name: "Deezer",      color: "var(--dz)", unit: "",      link: "https://www.deezer.com/en/channels/charts", worldwide: true,
+             logo: { light: "/logos/deezer.png", dark: "/logos/deezer.png", ratio: 3.614, h: 24, chipOnDark: true } }
 };
 /* Keep these in step with COUNTRIES in server.js. */
 const COUNTRIES = [["ng", "Nigeria"], ["gh", "Ghana"], ["za", "South Africa"], ["ke", "Kenya"], ["gb", "United Kingdom"], ["us", "United States"]];
@@ -424,6 +440,19 @@ document.addEventListener("visibilitychange", function () {
 });
 
 /* ---- Rendering ---- */
+/* Official logo markup. One image if the same file works on light and dark pages, otherwise a light and a dark version.
+   "textName" means the artwork has no wordmark, so the platform's name is written beside it. */
+function logoHtml(p) {
+  const L = p.logo, h = L.h || 24, w = Math.round(h * L.ratio);
+  const size = ' width="' + w + '" height="' + h + '"';
+  const alt = L.textName ? "" : p.name;
+  if (L.light === L.dark) {
+    return '<img class="plat-logo' + (L.chipOnDark ? " logo-chip" : "") + '" src="' + L.light + '" alt="' + alt + '"' + size + '>';
+  }
+  return '<img class="plat-logo logo-light" src="' + L.light + '" alt="' + alt + '"' + size + '>' +
+         '<img class="plat-logo logo-dark" src="' + L.dark + '" alt=""' + size + '>';
+}
+
 function safeUrl(u) { return encodeURI(u).replace(/"/g, "%22"); }
 
 function rowEl(r, p, data, i, enter) {
@@ -481,7 +510,9 @@ function paint() {
   animateNext = false;
   const items = data.items;
   const shown = state.showAll ? items : items.slice(0, FIRST_PAGE);
-  document.getElementById("panel-title").innerHTML = '<span class="dot" style="background:' + p.color + '"></span>' + p.name + " Top " + (shown.length || FIRST_PAGE);
+  const heading = "Top " + (shown.length || FIRST_PAGE);
+  document.getElementById("panel-title").innerHTML = p.logo ? logoHtml(p) + "<span>" + (p.logo.textName ? p.name + " " : "") + heading + "</span>"
+    : '<span class="dot" style="background:' + p.color + '"></span>' + p.name + " " + heading;
 
   const rows = shown.map(function (r, i) { return rowEl(r, p, data, i, enter); });
   if (!rows.length) {
