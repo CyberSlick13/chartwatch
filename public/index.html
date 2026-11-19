@@ -192,15 +192,24 @@ li.row.feature button.play { width: 44px; height: 44px; }
   li.row:hover { background: color-mix(in srgb, var(--plat) 6%, transparent); }
   li.row.enter { animation: rowin 0.4s cubic-bezier(0.2, 0.7, 0.2, 1) both; animation-delay: calc(var(--i, 0) * 35ms); }
   @keyframes rowin { from { opacity: 0; transform: translateY(8px); } }
+  /* Opening animation: the logo bars rise like an equalizer, the name fades in, then the #1 card and rows follow. Plays once per visit. */
+  .bar { transform-box: fill-box; transform-origin: 50% 100%; animation: barup 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+  .b1 { animation-delay: 0.05s; } .b2 { animation-delay: 0.15s; } .b3 { animation-delay: 0.25s; }
+  @keyframes barup { from { transform: scaleY(0.12); opacity: 0; } }
+  .word { animation: wordin 0.6s ease 0.3s both; }
+  @keyframes wordin { from { opacity: 0; transform: translateX(-8px); } }
+  .lede, .controls { animation: wordin 0.6s ease 0.45s both; }
+  body.intro li.row.feature.enter { animation-duration: 0.6s; animation-delay: 0.5s; }
+  body.intro li.row.enter:not(.feature) { animation-delay: calc(0.7s + var(--i, 0) * 35ms); }
 }
 </style>
 </head>
-<body>
+<body class="intro">
 <canvas id="bg" aria-hidden="true"></canvas>
 <div class="wrap">
   <header class="top">
     <div>
-      <h1><svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="16" width="7" height="13" rx="3.5" fill="currentColor"/><rect x="12.5" y="4" width="7" height="25" rx="3.5" fill="currentColor"/><rect x="22" y="10" width="7" height="19" rx="3.5" fill="currentColor"/></svg>Chartwatch</h1>
+      <h1><svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><rect class="bar b1" x="3" y="16" width="7" height="13" rx="3.5" fill="currentColor"/><rect class="bar b2" x="12.5" y="4" width="7" height="25" rx="3.5" fill="currentColor"/><rect class="bar b3" x="22" y="10" width="7" height="19" rx="3.5" fill="currentColor"/></svg><span class="word">Chartwatch</span></h1>
       <p class="lede">Top tracks from YouTube, Apple Music and Deezer, with 30-second previews.</p>
     </div>
     <span class="sample" id="sample-pill">Sample data</span>
@@ -323,6 +332,7 @@ const listEl = document.getElementById("list");
 const moreEl = document.getElementById("more");
 const moreBtn = document.getElementById("more-btn");
 let lastData = null;
+setTimeout(function () { document.body.classList.remove("intro"); }, 2500); // the opening delays apply to the first load only
 let animateNext = true; // rows fade in after a tab or country change, not on the 5-minute refresh
 
 Object.keys(PLATFORMS).forEach(function (key) {
