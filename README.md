@@ -28,6 +28,10 @@ Without a key the page still works. YouTube shows sample data for Nigeria only, 
 - Countries are listed in `COUNTRIES` in `server.js` (and the same list in `public/index.html`). To add one, add it to both. Not every platform publishes a chart for every country.
 - Deezer's country charts are Deezer's own "Top <country>" playlists, found by name. If one can't be found, the page shows Deezer's worldwide chart and says so.
 
+### Platform logos
+
+Official logos live in `public/logos/` and must be used exactly as the platform supplies them (no recoloring or editing). A platform gets one by adding a `logo` entry in `PLATFORMS` in `public/index.html`, with a version for light pages and one for dark pages. Check each platform's brand rules first. YouTube, Apple Music (app icon, with the name written beside it) and Deezer all have logos. Deezer only supplies a black-wordmark version, so on dark pages it sits on a white badge; swapping in Deezer's white logo from its brand kit would be tidier.
+
 ### Movement arrows
 
 Each chart's ranks are saved once a day. The server compares the latest chart with the last saved day and marks each row up, down, unchanged or NEW. The header says which day it compared against. Nothing shows until two different days have been saved. Days are counted in UTC.
