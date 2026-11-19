@@ -30,6 +30,8 @@ Without a key the page still works. YouTube shows sample data for Nigeria only, 
 
 ### Platform logos
 
+Opening animation: the logo bars rise, then the name, #1 card and rows fade in (about 1.5 seconds, first load only, skipped for reduced-motion users). It lives in the CSS next to `rowin` in `public/index.html`.
+
 Official logos live in `public/logos/` and must be used exactly as the platform supplies them (no recoloring or editing). A platform gets one by adding a `logo` entry in `PLATFORMS` in `public/index.html`, with a version for light pages and one for dark pages. Check each platform's brand rules first. YouTube, Apple Music (app icon, with the name written beside it) and Deezer all have logos. Deezer only supplies a black-wordmark version, so on dark pages it sits on a white badge; swapping in Deezer's white logo from its brand kit would be tidier.
 
 ### Movement arrows
