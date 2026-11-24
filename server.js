@@ -289,7 +289,8 @@ async function deezerChart(region) {
       value: null,
       cover: album.cover_medium || album.cover || null,
       url: t.link || null,
-      preview: t.preview || null
+      // Deezer's own preview links are signed and stop working after a while, so the page asks this server for a fresh one when a song is played.
+      preview: t.preview ? "/api/preview/deezer/" + t.id : null
     };
   });
   if (!items.length) throw new Error("Deezer returned no tracks");
@@ -367,6 +368,20 @@ const server = http.createServer(async function (req, res) {
   const m = url.pathname.match(/^\/api\/charts\/([a-z]+)$/);
 
   if (url.pathname === "/health") return sendJson(res, 200, { ok: true });
+
+  const pv = url.pathname.match(/^\/api\/preview\/deezer\/(\d+)$/);
+  if (pv) {
+    try {
+      const track = await deezerGet("https://api.deezer.com/track/" + pv[1]);
+      if (!track.preview) { res.writeHead(404); return res.end(); }
+      res.writeHead(302, { Location: track.preview, "Cache-Control": "no-store" });
+      return res.end();
+    } catch (err) {
+      console.error("deezer preview", pv[1], err.message);
+      res.writeHead(502);
+      return res.end();
+    }
+  }
   if (!m) return serveStatic(url.pathname, res);
   if (req.method !== "GET") return sendJson(res, 405, { error: "method_not_allowed" });
 

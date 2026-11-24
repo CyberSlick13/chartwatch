@@ -24,7 +24,7 @@ Without a key the page still works. YouTube shows sample data for Nigeria only, 
 
 ### Previews and countries
 
-- Deezer rows play the 30-second preview file Deezer provides. Apple Music rows play Apple's preview, looked up from Apple's public lookup (rows without one get no button). YouTube rows open YouTube's own embedded player under the row. Some videos block embedding, and the page says so.
+- Deezer rows play the 30-second preview file Deezer provides. Deezer's links expire after a while, so the page asks the server (`/api/preview/deezer/<track id>`) for a fresh one each time a song is played. Apple Music rows play Apple's preview, looked up from Apple's public lookup (rows without one get no button). YouTube rows open YouTube's own embedded player under the row. Some videos block embedding, and the page says so.
 - Countries are listed in `COUNTRIES` in `server.js` (and the same list in `public/index.html`). To add one, add it to both. Not every platform publishes a chart for every country.
 - Deezer's country charts are Deezer's own "Top <country>" playlists, found by name. If one can't be found, the page shows Deezer's worldwide chart and says so.
 
